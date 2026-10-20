@@ -12,6 +12,12 @@ This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
 in this fork do NOT change that image. The host port is bound to localhost.
 
+## Windows: E:\Docker\Suwayomi-Server install
+
+For the complete E: drive setup, data location and safe Windows commands, see
+[WINDOWS-E-DRIVE.md](WINDOWS-E-DRIVE.md). No fixed drive is hardcoded in
+the runtime Compose configuration or startup script.
+
 Run from the repository root on a machine with Docker Desktop:
 
 ```powershell

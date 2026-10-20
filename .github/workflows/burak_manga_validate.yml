@@ -29,3 +29,11 @@ jobs:
         run: python -m unittest discover -s deploy/burak-manga/tests -v
       - name: Compose static config
         run: docker compose -f deploy/burak-manga/compose.yaml config --quiet
+      - name: Parse Windows startup PowerShell (syntax only)
+        shell: pwsh
+        run: |
+          $Tokens = $null
+          $Errors = $null
+          $Path = Join-Path $PWD 'deploy/burak-manga/scripts/start-windows.ps1'
+          [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors) | Out-Null
+          if ($Errors.Count -gt 0) { $Errors | Format-List; exit 1 }
