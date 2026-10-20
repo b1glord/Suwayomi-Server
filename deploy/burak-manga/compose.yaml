@@ -1,0 +1,25 @@
+# Dosya Yolu: REPO_ROOT/deploy/burak-manga/compose.yaml
+# Amac: Manga arsivi icin localhost sinirli Suwayomi kurulumu
+# Modul - YAML
+# Version: 0.1.0
+# Aciklama: Resmi stable imaj ve kalici host verisi
+# Bagimli Oldugu Katman: Infrastructure
+services:
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:stable
+    init: true
+    environment:
+      TZ: Europe/Istanbul
+      DOWNLOAD_AS_CBZ: "true"
+    ports:
+      - "127.0.0.1:4567:4567"
+    volumes:
+      - ./storage/Tachidesk:/home/suwayomi/.local/share/Tachidesk
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
