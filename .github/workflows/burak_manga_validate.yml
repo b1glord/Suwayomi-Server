@@ -1,0 +1,39 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_validate.yml
+# Amac: Manga arsivi dosyalarini yalnizca PR esnasinda dogrular
+# Modul - YAML
+# Version: 0.1.0
+# Aciklama: Unit test, kaynak kaydi ve Compose statik kontrolu; release yok
+# Bagimli Oldugu Katman: Testing
+name: Burak Manga - validate
+on:
+  pull_request:
+    paths:
+      - 'deploy/burak-manga/**'
+      - 'AGENTS.md'
+      - '.github/workflows/burak_manga_validate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Validate source registry (offline)
+        run: python deploy/burak-manga/scripts/validate_sources.py
+      - name: Unit tests (offline)
+        run: python -m unittest discover -s deploy/burak-manga/tests -v
+      - name: Compose static config
+        run: docker compose -f deploy/burak-manga/compose.yaml config --quiet
+      - name: Parse Windows startup PowerShell (syntax only)
+        shell: pwsh
+        run: |
+          $Tokens = $null
+          $Errors = $null
+          $Path = Join-Path $PWD 'deploy/burak-manga/scripts/start-windows.ps1'
+          [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors) | Out-Null
+          if ($Errors.Count -gt 0) { $Errors | Format-List; exit 1 }
