@@ -125,16 +125,10 @@ mod win {
         fn control(&self, id: usize) -> HWND { self.controls.get(&id).copied().unwrap_or(ptr::null_mut()) }
         fn label(&self, message: &str) { write(self.control(STATUS), message); }
         fn log(&self, message: &str) { write(self.control(LOG), message); }
-        fn enabled(&self, value: i32) {
-            for id in [START, STOP, RESTART, REFRESH, LOGS] {
-                unsafe { EnableWindow(self.control(id), value); }
-            }
-        }
         fn launch(&mut self, action: Action) {
             if self.busy { return; }
             self.busy = true;
             self.label(&format!("{} islemi devam ediyor...", action.title()));
-            self.enabled(0);
             let path = self.compose.clone();
             let tx = self.sender.clone();
             thread::spawn(move || {
@@ -146,7 +140,6 @@ mod win {
         fn poll(&mut self) {
             while let Ok(done) = self.receiver.try_recv() {
                 self.busy = false;
-                self.enabled(1);
                 match done.output {
                     Ok(output) => self.log(&format!("{}:\r\n\r\n{output}", done.action.title())),
                     Err(reason) => self.log(&format!("{} HATASI:\r\n\r\n{reason}", done.action.title())),
@@ -311,7 +304,7 @@ mod win {
             class.hInstance = instance;
             class.lpfnWndProc = Some(procedure);
             class.lpszClassName = name.as_ptr();
-            class.hbrBackground = (COLOR_WINDOW as usize + 1) as _;
+            class.hbrBackground = 6 as _; // COLOR_WINDOW + 1
             if RegisterClassW(&class) == 0 {
                 return Err(format!("REGISTER_CLASS_FAILED: {}", std::io::Error::last_os_error()));
             }
@@ -327,7 +320,6 @@ mod win {
             layout(hwnd, &*ptr);
             SetTimer(hwnd, TIMER_ID, 200, None);
             ShowWindow(hwnd, SW_SHOW);
-            UpdateWindow(hwnd);
             (*ptr).launch(Action::Status);
             let mut msg: MSG = mem::zeroed();
             while GetMessageW(&mut msg, ptr::null_mut(), 0, 0) > 0 {
