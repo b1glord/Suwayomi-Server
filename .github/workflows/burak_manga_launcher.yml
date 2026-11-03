@@ -49,8 +49,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
           Copy-Item '.\target\release\BurakMangaLauncher.exe' (Join-Path $stage 'BurakMangaLauncher.exe')
           Copy-Item '..\compose.yaml' (Join-Path $stage 'compose.yaml')
-          & (Join-Path $stage 'BurakMangaLauncher.exe') --check-layout
-          if ($LASTEXITCODE -ne 0) { throw 'PORTABLE_LAYOUT_FAILED' }
+          $smoke = Start-Process -FilePath (Join-Path $stage 'BurakMangaLauncher.exe') -ArgumentList '--check-layout' -Wait -PassThru
+          Write-Host "Layout smoke exit code: $($smoke.ExitCode)"
+          if ($smoke.ExitCode -ne 0) { throw "PORTABLE_LAYOUT_FAILED: exit=$($smoke.ExitCode)" }
           $dist = Join-Path $env:RUNNER_TEMP 'BurakMangaDist'
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
           $exe = Join-Path $dist 'BurakMangaLauncher.exe'
