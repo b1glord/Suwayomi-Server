@@ -1,0 +1,42 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_launcher.yml
+# Amac: Windows GUI baslaticisi syntax ve layout testi
+# Modul - YAML
+# Version: 0.2.0
+# Aciklama: Test amacli; artifact, release veya yayin uretmez
+# Bagimli Oldugu Katman: Testing
+name: Burak Manga - Windows launcher
+on:
+  push:
+    branches:
+      - develop/burak-manga
+    paths:
+      - 'deploy/burak-manga/Launcher.cmd'
+      - 'deploy/burak-manga/scripts/launcher.ps1'
+      - '.github/workflows/burak_manga_launcher.yml'
+  pull_request:
+    paths:
+      - 'deploy/burak-manga/Launcher.cmd'
+      - 'deploy/burak-manga/scripts/launcher.ps1'
+      - '.github/workflows/burak_manga_launcher.yml'
+permissions:
+  contents: read
+jobs:
+  launcher-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Parse PowerShell GUI launcher
+        shell: powershell
+        run: |
+          $Tokens = $null
+          $Errors = $null
+          $Path = Join-Path $PWD 'deploy/burak-manga/scripts/launcher.ps1'
+          [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors) | Out-Null
+          if ($Errors.Count -gt 0) {
+            $Errors | Format-List
+            exit 1
+          }
+      - name: Validate WPF layout without Docker
+        shell: cmd
+        run: powershell.exe -NoLogo -NoProfile -STA -File deploy\burak-manga\scripts\launcher.ps1 -ValidateLayout

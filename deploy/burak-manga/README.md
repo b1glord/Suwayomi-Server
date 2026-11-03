@@ -75,3 +75,9 @@ container testing. Use permitted content only; no DRM/CAPTCHA bypass.
 
 For the architecture decision, see docs/decisions/0001-suwayomi.md in
 this directory.
+
+## Windows GUI launcher
+
+Docker sunucusunu ve imzali uzanti katalog adresini grafik arayuzle yonetmek icin
+[Launcher.cmd](Launcher.cmd) dosyasina cift tiklayin. Ayrintilar:
+[LAUNCHER.md](LAUNCHER.md).
