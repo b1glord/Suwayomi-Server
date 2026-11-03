@@ -30,11 +30,11 @@ impl Action {
     }
     fn title(self) -> &'static str {
         match self {
-            Self::Start => "Baslatma",
+            Self::Start => "Başlatma",
             Self::Stop => "Durdurma",
             Self::Restart => "Yeniden baslatma",
             Self::Status => "Sunucu durumu",
-            Self::Logs => "Gunlukler",
+            Self::Logs => "Günlükler",
         }
     }
 }
@@ -86,6 +86,7 @@ mod win {
     const COPY: usize = 116;
     const OPEN: usize = 117;
     const TIMER_ID: usize = 5;
+    const GUI_SMOKE_TIMER: usize = 6;
     const EM_SETSEL: u32 = 0x00B1;
     const WM_COPY: u32 = 0x0301;
     const WM_SETFONT: u32 = 0x0030;
@@ -221,11 +222,11 @@ mod win {
         make(hwnd, state, HEADER, "STATIC", "BURAK MANGA  |  RUST v0.3.0", 0, 0);
         make(hwnd, state, STATUS, "STATIC", "Sunucu durumu kontrol ediliyor...", 0, 0);
         for (id, caption) in [
-            (START, "Baslat"), (STOP, "Durdur"), (RESTART, "Yeniden Baslat"), (REFRESH, "Durumu Yenile"),
-            (WEB_BUTTON, "WebUI Ac"), (LOGS, "Gunlukler"), (COPY, "Katalogu Kopyala"), (OPEN, "Katalogu Ac")
+            (START, "Başlat"), (STOP, "Durdur"), (RESTART, "Yeniden Başlat"), (REFRESH, "Durumu Yenile"),
+            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç")
         ] { make(hwnd, state, id, "BUTTON", caption, WS_TABSTOP, 0); }
         make(hwnd, state, URL, "EDIT", CATALOG, ES_READONLY, WS_EX_CLIENTEDGE);
-        make(hwnd, state, LOG, "EDIT", "Islem gunlukleri burada gorunecek.",
+        make(hwnd, state, LOG, "EDIT", "İşlem günlükleri burada görünecek.",
             ES_READONLY | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, WS_EX_CLIENTEDGE);
     }
     unsafe fn layout(hwnd: HWND, state: &App) {
@@ -276,12 +277,13 @@ mod win {
                     COPY => {
                         SendMessageW(gui.control(URL), EM_SETSEL, 0, -1);
                         SendMessageW(gui.control(URL), WM_COPY, 0, 0);
-                        gui.log("Imzali katalog adresi panoya kopyalandi.");
+                        gui.log("İmzalı katalog adresi panoya kopyalandı.");
                     }
                     _ => {}
                 }
                 0
             }
+            WM_TIMER if wp == GUI_SMOKE_TIMER => { DestroyWindow(hwnd); 0 }
             WM_TIMER if !state.is_null() => { (&mut *state).poll(); 0 }
             WM_SIZE if !state.is_null() => { layout(hwnd, &*state); 0 }
             WM_DESTROY => { KillTimer(hwnd, TIMER_ID); PostQuitMessage(0); 0 }
@@ -295,7 +297,7 @@ mod win {
             _ => DefWindowProcW(hwnd, message, wp, lp),
         }
     }
-    pub fn run(compose: PathBuf) -> Result<(), String> {
+    pub fn run(compose: PathBuf, smoke_gui: bool) -> Result<(), String> {
         unsafe {
             let instance = GetModuleHandleW(ptr::null());
             if instance.is_null() { return Err("GET_INSTANCE_FAILED".into()); }
@@ -319,6 +321,10 @@ mod win {
             children(hwnd, &mut *ptr);
             layout(hwnd, &*ptr);
             SetTimer(hwnd, TIMER_ID, 200, None);
+            if smoke_gui && SetTimer(hwnd, GUI_SMOKE_TIMER, 1250, None) == 0 {
+                DestroyWindow(hwnd);
+                return Err("GUI_SMOKE_TIMER_FAILED".into());
+            }
             ShowWindow(hwnd, SW_SHOW);
             (*ptr).launch(Action::Status);
             let mut msg: MSG = mem::zeroed();
@@ -334,13 +340,15 @@ mod win {
 fn main() {
     #[cfg(windows)]
     {
-        let check = std::env::args().skip(1).any(|arg| arg == "--check-layout");
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let check = args.iter().any(|arg| arg == "--check-layout");
+        let smoke_gui = args.iter().any(|arg| arg == "--smoke-gui");
         let outcome = std::env::current_exe().map_err(|e| e.to_string())
             .and_then(|exe| compose_file(&exe))
-            .and_then(|compose| if check { Ok(()) } else { win::run(compose) });
+            .and_then(|compose| if check { Ok(()) } else { win::run(compose, smoke_gui) });
         if let Err(e) = outcome {
             eprintln!("BURAK_MANGA_ERROR: {e}");
-            if !check { win::error(&format!("Baslatici acilamadi:\n\n{e}")); }
+            if !check { win::error(&format!("Başlatici acilamadi:\n\n{e}")); }
             std::process::exit(1);
         }
     }
