@@ -76,8 +76,8 @@ container testing. Use permitted content only; no DRM/CAPTCHA bypass.
 For the architecture decision, see docs/decisions/0001-suwayomi.md in
 this directory.
 
-## Windows GUI launcher
+## Windows GUI launcher (Rust)
 
-Docker sunucusunu ve imzali uzanti katalog adresini grafik arayuzle yonetmek icin
-[Launcher.cmd](Launcher.cmd) dosyasina cift tiklayin. Ayrintilar:
+Windows icin native Rust EXE kurulumu ve test artifacti adimlari:
 [LAUNCHER.md](LAUNCHER.md).
+Mevcut Docker Compose ve storage verileri korunur; WPF/PowerShell arayuzu kullanilmaz.

@@ -1,58 +1,62 @@
 <!--
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
-Amac: Windows manga baslaticisini kullanma ve test etme
+Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.2.0
-Aciklama: Docker GUI islemleri, imzali katalog, guvenlik sinirlari
+Version: 0.3.0
+Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.2.0
+# Burak Manga Launcher v0.3.0 (Rust)
 
-Windows 10/11 icin tasinabilir bir PowerShell 5.1 + WPF arayuzudur.
-Harici EXE kurulumuna ihtiyac yoktur. Mevcut Suwayomi Docker projesinde
-develop/burak-manga dalini kullanin.
+Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
+ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
 
-## Kullanim
+## Indirme ve baslatma
 
-Temiz calisma agacinda git pull --ff-only origin develop/burak-manga
-komutundan sonra deploy/burak-manga/Launcher.cmd dosyasina cift tiklayin.
-Baslatici hangi diskte veya klasorde bulunursa bulunsun kendi script
-konumuna gore Compose ve kalici veri klasorunu bulur.
+GitHub Actions sayfasinda Burak Manga - Rust launcher isimli is akisini acin.
+Basarili bir calismanin Artifacts bolumundeki
+burak-manga-rust-windows-x64 dosyasini indirin.
 
-- Baslat: Mevcut start-windows.ps1 ile dogrulama ve Docker Compose up -d.
-- Durdur: Yalniz suwayomi servisine docker compose stop.
-- Yeniden baslat: Yalniz suwayomi servisine docker compose restart.
-- Durum: Docker Compose ps --status running --services.
-- Gunlukler: Son 100 Docker Compose gunluk satiri.
-- WebUI: Yerel http://127.0.0.1:4567 adresini tarayicida acar.
-- Katalog: Imzali uzanti katalog adresini kopyalar veya HTTP HEAD ile kontrol eder.
+ZIP icindeki BurakMangaLauncher.exe dosyasini
+Suwayomi-Server/deploy/burak-manga klasorundeki compose.yaml dosyasinin
+yanina kopyalayin. EXE'ye cift tiklayin; alternatif olarak Launcher.cmd.
+ZIP icindeki README ve SHA256SUMS dosyalarini da kontrol edebilirsiniz.
 
-Katalog:
-https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb
+EXE'nin kurulumu sabit disk yoluna bagli degildir. Yanlis klasore
+konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 
-Rüya Manga ve Merlin Scans icin bu katalog adresini Suwayomi WebUI sunucu
-ayarlarindaki uzanti depolarina bir kez ekleyin; uzanti kurulumunu WebUI'den
-gerceklestirin. Launcher sessiz APK kurulumu veya otomatik indirme yapmaz.
+## Islevler
 
-## Sinirlar ve guvenlik
+- Baslat: Docker Engine ve Compose konfigrasyonunu kontrol eder, Suwayomi'yi baslatir.
+- Durdur: Sadece ilgili Suwayomi servisini durdurur.
+- Yeniden Baslat: Sadece ilgili Suwayomi servisini yeniden baslatir.
+- Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
+- WebUI: Yerel http://127.0.0.1:4567 adresini acar.
+- Katalog: Rüya Manga ve Merlin Scans imzali katalog URL'sini kopyalar ya da acar.
 
-- Docker Desktop Linux motoru calisir durumda olmalidir.
-- Yonetici yetkisi istemez. Git, branch veya server ayarlarini degistirmez.
-- Storage/Tachidesk verisini silmez; down -v komutu bulunmaz.
-- GitHub Secrets, imza anahtari ve parolalara erismez.
-- GUI penceresini kapatmak calisan Docker container'ini durdurmaz.
-- HEAD 200 sonucunu gercek uzanti kurulumu/bolum okuma basarisi saymayin.
-- Docker gunlukleri hassas URL ya da bilgiler icerebilir; paylasmadan once inceleyin.
+Katalog: https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb
 
-## Windows arayuz dogrulamasi
+Katalog Suwayomi WebUI uzanti depo ayarlarina bir kez elle eklenir.
+Baslatici APK/uzanti kurulumu yapmaz, manga indirmez.
 
-PowerShell 5.1 ile:
+## Guvenlik
 
-    powershell.exe -NoProfile -STA -File .\deploy\burak-manga\scripts\launcher.ps1 -ValidateLayout
+Storage/Tachidesk silinmez. down -v, image prune, secret islemi
+ve GitHub release olusturma yoktur. Docker komutlari shell'e
+karistirilmadan sabit argument dizileriyle yurutulur. Islem
+suresi sinirlidir ve GUI'yi bloke etmemek icin worker thread kullanilir.
+EXE kapatilsa da sunucu acik kalabilir.
 
-Bu test UI nesnelerini kurar, Docker'a dokunmaz. Windows GitHub Actions
-is akisi ayni testi ve PowerShell syntax kontrolunu yapar. Bu kontroller
-canli Docker, uzanti kurulum ve bolum okuma testlerinin yerine gecmez.
+## Dogrulama
 
-Acma sorunu olursa PowerShell'den GUI betigini calistirarak hatayi gorun.
+Windows Actions testi Cargo Clippy, Rust unit test ve release build,
+portable layout smoke, ZIP girdileri ve SHA256 kontrol dosyasini kapsar.
+Windows GUI tiklama, yerel Docker ve uzanti calisma testleri yapilmadiysa
+basarili olarak raporlanmaz.
+
+Kaynak: deploy/burak-manga/launcher-rust.
+Gelistirme: cargo fmt, cargo clippy, cargo test, cargo build --release.
+CLI kontrol: BurakMangaLauncher.exe --check-layout (Docker baslatmaz).
+
+Eski WPF launcher.ps1 dosyasi bu giris noktasindan artik calistirilmaz.

@@ -1,42 +1,77 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_launcher.yml
-# Amac: Windows GUI baslaticisi syntax ve layout testi
+# Amac: Native Rust Windows baslaticisini derler ve test ZIP artifacti uretir
 # Modul - YAML
-# Version: 0.2.0
-# Aciklama: Test amacli; artifact, release veya yayin uretmez
+# Version: 0.3.0
+# Aciklama: Windows x64 build, test, Clippy, checksum ve paket kontrolu
 # Bagimli Oldugu Katman: Testing
-name: Burak Manga - Windows launcher
+name: Burak Manga - Rust launcher
 on:
   push:
-    branches:
-      - develop/burak-manga
+    branches: [develop/burak-manga]
     paths:
+      - 'deploy/burak-manga/launcher-rust/**'
       - 'deploy/burak-manga/Launcher.cmd'
-      - 'deploy/burak-manga/scripts/launcher.ps1'
       - '.github/workflows/burak_manga_launcher.yml'
   pull_request:
     paths:
+      - 'deploy/burak-manga/launcher-rust/**'
       - 'deploy/burak-manga/Launcher.cmd'
-      - 'deploy/burak-manga/scripts/launcher.ps1'
       - '.github/workflows/burak_manga_launcher.yml'
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  launcher-windows:
+  windows:
     runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: deploy/burak-manga/launcher-rust
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Parse PowerShell GUI launcher
-        shell: powershell
+      - uses: actions/checkout@v4
+      - name: Stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Cargo formatting in ephemeral checkout
+        run: cargo fmt --all
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Unit tests
+        run: cargo test
+      - name: Release build
+        run: cargo build --release
+      - name: Portable layout smoke and ZIP integrity
+        shell: pwsh
         run: |
-          $Tokens = $null
-          $Errors = $null
-          $Path = Join-Path $PWD 'deploy/burak-manga/scripts/launcher.ps1'
-          [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors) | Out-Null
-          if ($Errors.Count -gt 0) {
-            $Errors | Format-List
-            exit 1
-          }
-      - name: Validate WPF layout without Docker
-        shell: cmd
-        run: powershell.exe -NoLogo -NoProfile -STA -File deploy\burak-manga\scripts\launcher.ps1 -ValidateLayout
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'Burak Manga Test'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item '.\target\release\BurakMangaLauncher.exe' (Join-Path $stage 'BurakMangaLauncher.exe')
+          Copy-Item '..\compose.yaml' (Join-Path $stage 'compose.yaml')
+          & (Join-Path $stage 'BurakMangaLauncher.exe') --check-layout
+          if ($LASTEXITCODE -ne 0) { throw 'PORTABLE_LAYOUT_FAILED' }
+          $dist = Join-Path $env:RUNNER_TEMP 'BurakMangaDist'
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          $exe = Join-Path $dist 'BurakMangaLauncher.exe'
+          Copy-Item (Join-Path $stage 'BurakMangaLauncher.exe') $exe
+          $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLowerInvariant()
+          "$hash  BurakMangaLauncher.exe" | Set-Content -Path (Join-Path $dist 'SHA256SUMS.txt') -Encoding ascii
+          Copy-Item '..\LAUNCHER.md' (Join-Path $dist 'README.md')
+          $zipPath = 'BurakMangaLauncher-Windows-x64.zip'
+          Compress-Archive -Path (Join-Path $dist '*') -DestinationPath $zipPath -Force
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zipPath))
+          try {
+            $actual = @($archive.Entries | ForEach-Object Name)
+            foreach ($item in @('BurakMangaLauncher.exe', 'SHA256SUMS.txt', 'README.md')) {
+              if ($item -notin $actual) { throw "ZIP_ENTRY_MISSING: $item" }
+            }
+          } finally { $archive.Dispose() }
+      - name: Upload test artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: burak-manga-rust-windows-x64
+          path: deploy/burak-manga/launcher-rust/BurakMangaLauncher-Windows-x64.zip
+          retention-days: 7
+          if-no-files-found: error
