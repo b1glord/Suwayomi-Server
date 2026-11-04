@@ -2,12 +2,12 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.4.0
+Version: 0.5.0
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.4.0 (Rust)
+# Burak Manga Launcher v0.5.0 (Rust)
 
 Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
 ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
@@ -37,6 +37,14 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 - Arsiv: storage/Tachidesk/downloads altindaki CBZ dosyalarini, CBZ bulunan manga klasoru sayisini ve tum indirme dosyalarinin kapladigi boyutu gosterir.
 - Arsiv klasorunu ac: Mevcut indirme dizinini Windows Explorer'da acar, veri olusturmaz veya silmez.
 - OkuToon: Martial Peak sayfasini tarayicida acar. Bu, Suwayomi'ye uzanti kurmaz.
+- Indirme tanilama: Son 10 dakikanin Docker gunluklerinden Cloudflare hata satirlari,
+  baglanti sizintisi uyarilari ve bulunan son kuyruk sayilarini gosterir.
+- Indirmeleri Duraklat: Suwayomi'nin yerel GraphQL stopDownloader mutasyonunu
+  kullanir. Kuyruk silme, tamamlama veya otomatik tekrar deneme yapmaz.
+- Otomatik Koruma: Varsayilan KAPALI; kullanici acarsa son 10 dakikada en az
+  uc Cloudflare hata satiri ve gunlukte son bilinen aktif indirme varsa bir
+  kez stopDownloader cagirir. Kaynak ayirt etmez ve tekrar acilis yapmaz.
+  Durdurma basarisizsa WebUI uzerinden manuel kontrol gerekir.
 
 Katalog: https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb
 
@@ -81,3 +89,18 @@ CBZ bulunan ust klasorlerin sayisidir; kaynak klasor yapisi degisirse
 manga sayisi yaklasik olabilir. Boyut, indirme dizinindeki tum duz dosyalari
 (kismi indirmeler dahil) kapsar. Klasor yoksa hata gorunur. Tarama junction
 ve simgesel baglantilari takip etmez. Scan butonu GUI'yi bloke etmez.
+
+## Tanimli sinirlar
+
+Tanilama log satirlarini sayar; Cloudflare hata satiri sayisi benzersiz
+bolum veya icerik sayisi degildir. Son 10 dakikada durum satiri yoksa aktif
+indirme varsayilmaz. Otomatik Koruma global stopDownloader kullandigindan
+etkinse o anda calisan diger kaynaklari da duraklatabilir. Bu nedenle
+kullanici acmadan koruma devreye girmez. Docker disinda yetki/esas sunucu
+yapilandirmasi gerektiren ortamlarda GraphQL islemi reddedilebilir; servis
+veya guvenlik ayarlari otomatik olarak degistirilmez.
+
+Docker gunlukleri buyuk oldugunda stdout ve stderr ayri worker'larda
+akis halinde okunur, bellek kullanimi sinirlanir ve timeout korunur.
+Yasam dongusu testi gercek docker suwayomi durumu ve WebUI API'sine
+kullanici bilgisayarinda baglanarak ayrica dogrulanmalidir.
