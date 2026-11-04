@@ -255,7 +255,7 @@ mod win {
             (OKUTOON, "OkuToon / Martial Peak")
         ] { make(hwnd, state, id, "BUTTON", caption, WS_TABSTOP, 0); }
         make(hwnd, state, URL, "EDIT", CATALOG, ES_READONLY, WS_EX_CLIENTEDGE);
-        make(hwnd, state, ARCHIVE_LABEL, "Arşiv taranıyor...", 0, 0);
+        make(hwnd, state, ARCHIVE_LABEL, "STATIC", "Arşiv taranıyor...", 0, 0);
         make(hwnd, state, LOG, "EDIT", "İşlem günlükleri burada görünecek.",
             ES_READONLY | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, WS_EX_CLIENTEDGE);
     }
