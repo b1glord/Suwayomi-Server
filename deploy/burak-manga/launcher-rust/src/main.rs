@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.3.0
+// Version: 0.4.0
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -9,11 +9,14 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+mod archive;
+
 const CATALOG: &str = "https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb";
 const WEB: &str = "http://127.0.0.1:4567";
+const OKUTOON_MARTIAL_PEAK: &str = "https://okutoon.com/martial-peak";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Action { Start, Stop, Restart, Status, Logs }
+enum Action { Start, Stop, Restart, Status, Logs, Archive }
 
 impl Action {
     fn args(self, file: &Path) -> Vec<OsString> {
@@ -24,6 +27,7 @@ impl Action {
             Self::Restart => &["restart", "suwayomi"],
             Self::Status => &["ps", "--status", "running", "--services"],
             Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi"],
+            Self::Archive => &[],
         };
         args.extend(suffix.iter().map(OsString::from));
         args
@@ -35,6 +39,7 @@ impl Action {
             Self::Restart => "Yeniden baslatma",
             Self::Status => "Sunucu durumu",
             Self::Logs => "Günlükler",
+            Self::Archive => "Arşiv istatistikleri",
         }
     }
 }
@@ -54,7 +59,7 @@ fn compose_file(exe: &Path) -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 mod win {
-    use super::{Action, CATALOG, WEB};
+    use super::{archive, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
     use std::collections::HashMap;
     use std::ffi::{OsStr, OsString};
     use std::mem;
@@ -85,6 +90,10 @@ mod win {
     const LOGS: usize = 115;
     const COPY: usize = 116;
     const OPEN: usize = 117;
+    const ARCHIVE_LABEL: usize = 118;
+    const ARCHIVE_OPEN: usize = 119;
+    const ARCHIVE_REFRESH: usize = 120;
+    const OKUTOON: usize = 121;
     const TIMER_ID: usize = 5;
     const GUI_SMOKE_TIMER: usize = 6;
     const EM_SETSEL: u32 = 0x00B1;
@@ -142,10 +151,23 @@ mod win {
             while let Ok(done) = self.receiver.try_recv() {
                 self.busy = false;
                 match done.output {
-                    Ok(output) => self.log(&format!("{}:\r\n\r\n{output}", done.action.title())),
-                    Err(reason) => self.log(&format!("{} HATASI:\r\n\r\n{reason}", done.action.title())),
+                    Ok(output) => {
+                        if done.action == Action::Archive {
+                            write(self.control(ARCHIVE_LABEL), &output);
+                        }
+                        self.log(&format!("{}:\r\n\r\n{output}", done.action.title()));
+                    }
+                    Err(reason) => {
+                        if done.action == Action::Archive {
+                            write(self.control(ARCHIVE_LABEL), "Arşiv okunamadı; ayrıntılar günlükte.");
+                        }
+                        self.log(&format!("{} HATASI:\r\n\r\n{reason}", done.action.title()));
+                    }
                 }
                 self.label(&done.status.unwrap_or_else(|e| format!("Docker baglantisi yok: {e}")));
+                if done.action == Action::Status {
+                    self.launch(Action::Archive);
+                }
             }
         }
     }
@@ -189,6 +211,11 @@ mod win {
         Ok(())
     }
     fn perform(action: Action, compose: &Path) -> Result<String, String> {
+        if action == Action::Archive {
+            let path = archive::downloads_path(compose)?;
+            let stats = archive::scan(&path)?;
+            return Ok(archive::summary(&stats));
+        }
         if action == Action::Start {
             let root = compose.parent().ok_or("COMPOSE_PARENT_MISSING")?;
             let storage = root.join("storage");
@@ -219,13 +246,16 @@ mod win {
         }
     }
     unsafe fn children(hwnd: HWND, state: &mut App) {
-        make(hwnd, state, HEADER, "STATIC", "BURAK MANGA  |  RUST v0.3.0", 0, 0);
+        make(hwnd, state, HEADER, "STATIC", "BURAK MANGA  |  RUST v0.4.0", 0, 0);
         make(hwnd, state, STATUS, "STATIC", "Sunucu durumu kontrol ediliyor...", 0, 0);
         for (id, caption) in [
             (START, "Başlat"), (STOP, "Durdur"), (RESTART, "Yeniden Başlat"), (REFRESH, "Durumu Yenile"),
-            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç")
+            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç"),
+            (ARCHIVE_OPEN, "Arşiv Klasörünü Aç"), (ARCHIVE_REFRESH, "Arşivi Yenile"),
+            (OKUTOON, "OkuToon / Martial Peak")
         ] { make(hwnd, state, id, "BUTTON", caption, WS_TABSTOP, 0); }
         make(hwnd, state, URL, "EDIT", CATALOG, ES_READONLY, WS_EX_CLIENTEDGE);
+        make(hwnd, state, ARCHIVE_LABEL, "Arşiv taranıyor...", 0, 0);
         make(hwnd, state, LOG, "EDIT", "İşlem günlükleri burada görünecek.",
             ES_READONLY | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, WS_EX_CLIENTEDGE);
     }
@@ -251,7 +281,27 @@ mod win {
         pos(URL, margin, 231, full, 32);
         pos(COPY, margin, 278, bw + 55, 39);
         pos(OPEN, margin + bw + 67, 278, bw, 39);
-        pos(LOG, margin, 339, full, (height - 364).max(125));
+        pos(OKUTOON, margin + 2 * bw + 78, 278, bw + 20, 39);
+        pos(ARCHIVE_LABEL, margin, 329, full, 26);
+        pos(ARCHIVE_OPEN, margin, 360, bw + 80, 39);
+        pos(ARCHIVE_REFRESH, margin + bw + 92, 360, bw, 39);
+        pos(LOG, margin, 414, full, (height - 445).max(100));
+    }
+    fn browse_folder(hwnd: HWND, compose: &Path) -> Result<(), String> {
+        let root = archive::downloads_path(compose)?;
+        if !root.is_dir() {
+            return Err("İndirme klasörü henüz oluşmamış.".into());
+        }
+        let meta = std::fs::symlink_metadata(&root).map_err(|e| e.to_string())?;
+        if meta.file_attributes() & 0x400 != 0 {
+            return Err("ARCHIVE_REPARSE_POINT_NOT_ALLOWED".into());
+        }
+        let native: Vec<u16> = root.as_os_str().encode_wide().chain(Some(0)).collect();
+        let value = unsafe {
+            ShellExecuteW(hwnd, wide("open").as_ptr(), native.as_ptr(),
+                ptr::null(), ptr::null(), SW_SHOWNORMAL)
+        };
+        if (value as isize) <= 32 { Err("Arşiv klasörü açılamadı.".into()) } else { Ok(()) }
     }
     fn browse(hwnd: HWND, url: &str) -> Result<(), String> {
         let value = unsafe {
@@ -274,6 +324,9 @@ mod win {
                     LOGS => gui.launch(Action::Logs),
                     WEB_BUTTON => if let Err(e) = browse(hwnd, WEB) { gui.log(&e); },
                     OPEN => if let Err(e) = browse(hwnd, CATALOG) { gui.log(&e); },
+                    OKUTOON => if let Err(e) = browse(hwnd, OKUTOON_MARTIAL_PEAK) { gui.log(&e); },
+                    ARCHIVE_REFRESH => gui.launch(Action::Archive),
+                    ARCHIVE_OPEN => if let Err(e) = browse_folder(hwnd, &gui.compose) { gui.log(&e); },
                     COPY => {
                         SendMessageW(gui.control(URL), EM_SETSEL, 0, -1);
                         SendMessageW(gui.control(URL), WM_COPY, 0, 0);
@@ -311,7 +364,7 @@ mod win {
                 return Err(format!("REGISTER_CLASS_FAILED: {}", std::io::Error::last_os_error()));
             }
             let hwnd = CreateWindowExW(
-                0, name.as_ptr(), wide("Burak Manga Launcher v0.3.0").as_ptr(),
+                0, name.as_ptr(), wide("Burak Manga Launcher v0.4.0").as_ptr(),
                 WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                 850, 620, ptr::null_mut(), ptr::null_mut(), instance, ptr::null(),
             );

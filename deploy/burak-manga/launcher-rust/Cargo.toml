@@ -1,12 +1,12 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/Cargo.toml
 # Amac: Native Windows Rust manga baslaticisinin crate tanimi
 # Modul - TOML
-# Version: 0.3.0
+# Version: 0.4.0
 # Aciklama: Windows SDK ile tek EXE, ek GUI runtime yok
 # Bagimli Oldugu Katman: Application
 [package]
 name = "burak-manga-launcher"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 rust-version = "1.83"
 publish = false

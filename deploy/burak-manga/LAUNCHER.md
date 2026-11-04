@@ -2,12 +2,12 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.3.0
+Version: 0.4.0
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.3.0 (Rust)
+# Burak Manga Launcher v0.4.0 (Rust)
 
 Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
 ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
@@ -34,6 +34,9 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 - Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
 - WebUI: Yerel http://127.0.0.1:4567 adresini acar.
 - Katalog: Rüya Manga ve Merlin Scans imzali katalog URL'sini kopyalar ya da acar.
+- Arsiv: storage/Tachidesk/downloads altinda tamamlanmis CBZ bolumlerini, CBZ bulunan manga klasoru sayisini ve tum indirme dosyalarinin kapladigi boyutu gosterir.
+- Arsiv klasorunu ac: Mevcut indirme dizinini Windows Explorer'da acar, veri olusturmaz veya silmez.
+- OkuToon: Martial Peak sayfasini tarayicida acar. Bu, Suwayomi'ye uzanti kurmaz.
 
 Katalog: https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb
 
@@ -60,3 +63,21 @@ Gelistirme: cargo fmt, cargo clippy, cargo test, cargo build --release.
 CLI kontrol: BurakMangaLauncher.exe --check-layout (Docker baslatmaz).
 
 Eski WPF launcher.ps1 dosyasi bu giris noktasindan artik calistirilmaz.
+
+## OkuToon kurulumu (Suwayomi)
+
+OkuToon modulu Keiyoushi extensions-source icinde mevcut, ancak bu projenin imzali
+iki uzantili katalogunda yok. Suwayomi WebUI Extension stores ekranina ayrica
+Keiyoushi katalogunu ekleyebilirsiniz:
+
+    https://github.com/keiyoushi/extensions/raw/repo/index.pb
+
+Browse > Extensions icinde OkuToon uzantisini bulun, kurun ve kaynaklarda
+Martial Peak arayin. Yalniz indirme izniniz bulunan icerigi arsivleyin.
+Yerel calisma, bolum erisimi ve indirme haklari ayri dogrulanmalidir.
+
+Arsiv sayaci CBZ uzantili dosyalari tamamlanmis bolum sayar. Manga sayisi,
+CBZ bulunan ust klasorlerin sayisidir; kaynak klasor yapisi degisirse
+manga sayisi yaklasik olabilir. Boyut, indirme dizinindeki tum duz dosyalari
+(kismi indirmeler dahil) kapsar. Klasor yoksa hata gorunur. Tarama junction
+ve simgesel baglantilari takip etmez. Scan butonu GUI'yi bloke etmez.
