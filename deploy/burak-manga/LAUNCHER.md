@@ -34,7 +34,7 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 - Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
 - WebUI: Yerel http://127.0.0.1:4567 adresini acar.
 - Katalog: Rüya Manga ve Merlin Scans imzali katalog URL'sini kopyalar ya da acar.
-- Arsiv: storage/Tachidesk/downloads altinda tamamlanmis CBZ bolumlerini, CBZ bulunan manga klasoru sayisini ve tum indirme dosyalarinin kapladigi boyutu gosterir.
+- Arsiv: storage/Tachidesk/downloads altindaki CBZ dosyalarini, CBZ bulunan manga klasoru sayisini ve tum indirme dosyalarinin kapladigi boyutu gosterir.
 - Arsiv klasorunu ac: Mevcut indirme dizinini Windows Explorer'da acar, veri olusturmaz veya silmez.
 - OkuToon: Martial Peak sayfasini tarayicida acar. Bu, Suwayomi'ye uzanti kurmaz.
 
@@ -76,7 +76,7 @@ Browse > Extensions icinde OkuToon uzantisini bulun, kurun ve kaynaklarda
 Martial Peak arayin. Yalniz indirme izniniz bulunan icerigi arsivleyin.
 Yerel calisma, bolum erisimi ve indirme haklari ayri dogrulanmalidir.
 
-Arsiv sayaci CBZ uzantili dosyalari tamamlanmis bolum sayar. Manga sayisi,
+Arsiv sayaci CBZ uzantili dosyalari bolum olarak sayar; dosya uzantisi tek basina indirme tamamlandi veya ZIP saglam demek degildir. Manga sayisi,
 CBZ bulunan ust klasorlerin sayisidir; kaynak klasor yapisi degisirse
 manga sayisi yaklasik olabilir. Boyut, indirme dizinindeki tum duz dosyalari
 (kismi indirmeler dahil) kapsar. Klasor yoksa hata gorunur. Tarama junction

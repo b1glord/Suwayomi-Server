@@ -1,5 +1,5 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/archive.rs
-// Amac: Suwayomi'nin kalici arsivinde tamamlanan CBZ ve disk kullanimini sayar
+// Amac: Suwayomi'nin kalici arsivindeki CBZ dosyalarini ve disk kullanimini sayar
 // Modul - Rust
 // Version: 0.4.0
 // Aciklama: Read-only tarama; junction/symlink izlemeyen ve sinirli dizin gecisi

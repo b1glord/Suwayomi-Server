@@ -246,7 +246,7 @@ mod win {
         }
     }
     unsafe fn children(hwnd: HWND, state: &mut App) {
-        make(hwnd, state, HEADER, "STATIC", "BURAK MANGA  |  RUST v0.4.0", 0, 0);
+        make(hwnd, state, HEADER, "STATIC", &format!("BURAK MANGA  |  RUST v{}", env!("CARGO_PKG_VERSION")), 0, 0);
         make(hwnd, state, STATUS, "STATIC", "Sunucu durumu kontrol ediliyor...", 0, 0);
         for (id, caption) in [
             (START, "Başlat"), (STOP, "Durdur"), (RESTART, "Yeniden Başlat"), (REFRESH, "Durumu Yenile"),
@@ -364,7 +364,7 @@ mod win {
                 return Err(format!("REGISTER_CLASS_FAILED: {}", std::io::Error::last_os_error()));
             }
             let hwnd = CreateWindowExW(
-                0, name.as_ptr(), wide("Burak Manga Launcher v0.4.0").as_ptr(),
+                0, name.as_ptr(), wide(&format!("Burak Manga Launcher v{}", env!("CARGO_PKG_VERSION"))).as_ptr(),
                 WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
                 850, 620, ptr::null_mut(), ptr::null_mut(), instance, ptr::null(),
             );
