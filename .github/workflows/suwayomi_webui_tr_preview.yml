@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/suwayomi_webui_tr_preview.yml
 # Amac: Pinli Suwayomi-WebUI Turkce onizleme ZIP test artifacti
 # Modul - YAML
-# Version: 0.1.0
+# Version: 0.2.0
 # Aciklama: Ana manga kurulumundan ayri; production release uretmez
 # Bagimli Oldugu Katman: Testing
 name: Suwayomi - Turkish WebUI preview
@@ -51,10 +51,45 @@ jobs:
       - name: Build translated WebUI
         working-directory: webui
         run: pnpm exec vite build
+      - name: Stamp pinned upstream revision for custom WebUI
+        run: |
+          set -euo pipefail
+          rev=$(git -C webui rev-list --count HEAD)
+          test "$rev" -gt 0
+          printf 'r%s\n' "$rev" > webui/build/revision
       - name: Verify and package test ZIP
         run: |
           set -euo pipefail
           test -s webui/build/index.html
+          grep -Eq '^r[0-9]+
+          mkdir -p output
+          python3 - <<'PY'
+          import hashlib
+          import pathlib
+          import zipfile
+          root = pathlib.Path('webui/build')
+          files = sorted(p for p in root.rglob('*') if p.is_file())
+          assert len(files) >= 10, 'WebUI incomplete'
+          output = pathlib.Path('output/Suwayomi-WebUI-TR-preview.zip')
+          with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
+              for file in files:
+                  zipf.write(file, arcname=file.relative_to(root).as_posix())
+          with zipfile.ZipFile(output) as zipf:
+              assert 'index.html' in zipf.namelist()
+              assert len(zipf.namelist()) == len(files)
+              assert zipf.testzip() is None
+          digest = hashlib.sha256(output.read_bytes()).hexdigest()
+          pathlib.Path('output/SHA256SUMS.txt').write_text(
+              digest + '  ' + output.name + '\n', encoding='utf-8')
+          print('Files:', len(files), 'SHA256:', digest)
+          PY
+      - name: Upload preview artifact (not release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: suwayomi-webui-tr-preview
+          path: output/
+          retention-days: 7
+ webui/build/revision
           mkdir -p output
           python3 - <<'PY'
           import hashlib
