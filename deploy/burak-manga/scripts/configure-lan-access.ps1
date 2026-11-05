@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/scripts/configure-lan-access.ps1
 # Amac: Suwayomi telefon erisimi icin yerel IPv4 yayini ac/kapat
 # Modul - PowerShell
-# Version: 0.9.0
+# Version: 0.9.1
 # Aciklama: Auth korumasi, yalnizca suwayomi recreate, yedekli geri alma
 # Bagimli Oldugu Katman: Tool / Config
 
@@ -74,8 +74,8 @@ function Managed-IP {
     }
     return $Matches[1]
 }
-function Compose([string[]]$Args) {
-    & docker compose -f $base @Args
+function Compose([string[]]$Options) {
+    & docker compose -f $base @Options
     if ($LASTEXITCODE -ne 0) { throw 'LAN_DOCKER_COMPOSE_FAILED' }
 }
 if (-not (Test-Path -LiteralPath $base -PathType Leaf) -or
@@ -101,14 +101,14 @@ if ($Mode -eq 'Enable') {
     try {
         $lines = @('# BURAK_MANGA_LAN_V1','services:','  suwayomi:','    ports:',('      - "'+$ip+':4567:4567"'))
         [IO.File]::WriteAllText($temp,($lines -join [string][char]10) + [string][char]10,[Text.UTF8Encoding]::new($false))
-        Compose -Args @('-f',$temp,'config','--quiet')
+        Compose -Options @('-f',$temp,'config','--quiet')
         Move-Item -LiteralPath $temp -Destination $overlay
         try {
-            Compose -Args @('-f',$overlay,'up','-d','--no-deps','suwayomi')
+            Compose -Options @('-f',$overlay,'up','-d','--no-deps','suwayomi')
         } catch {
             $failed = Join-Path $data ('lan-failed-'+[guid]::NewGuid().ToString('N')+'.yaml')
             Move-Item -LiteralPath $overlay -Destination $failed
-            try { Compose -Args @('up','-d','--no-deps','suwayomi') }
+            try { Compose -Options @('up','-d','--no-deps','suwayomi') }
             catch { throw 'LAN_ENABLE_AND_ROLLBACK_FAILED' }
             throw 'LAN_ENABLE_FAILED_RESTORED_LOCALHOST'
         }
@@ -123,10 +123,10 @@ if ($Mode -eq 'Disable') {
     $backup = Join-Path $data ('lan-disabled-'+[guid]::NewGuid().ToString('N')+'.yaml')
     Move-Item -LiteralPath $overlay -Destination $backup
     try {
-        Compose -Args @('up','-d','--no-deps','suwayomi')
+        Compose -Options @('up','-d','--no-deps','suwayomi')
     } catch {
         Move-Item -LiteralPath $backup -Destination $overlay
-        try { Compose -Args @('-f',$overlay,'up','-d','--no-deps','suwayomi') }
+        try { Compose -Options @('-f',$overlay,'up','-d','--no-deps','suwayomi') }
         catch { throw 'LAN_DISABLE_AND_ROLLBACK_FAILED' }
         throw 'LAN_DISABLE_FAILED_RESTORED'
     }
