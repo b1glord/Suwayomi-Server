@@ -316,10 +316,13 @@ mod win {
         git_update::validate(&repo, &actual, &branch, &origin, &status)?;
         let updated = git(&git_update::pull_arguments(), &repo, Duration::from_secs(150))?;
         Ok(format!(
-            "Git Pull tamamlandı (fast-forward only):\\n{}\\n\\n\\
-             Bu işlem Docker image veya Launcher EXE dosyasını otomatik güncellemez. \\
-             Yeni Compose ayarları için Başlat'a basabilirsiniz. \\
-             Yeni EXE için GitHub Actions test ZIP'ini kullanın.",
+            concat!(
+                "Git Pull tamamlandı (fast-forward only):\n",
+                "{}\n\n",
+                "Bu işlem Docker image veya Launcher EXE dosyasını otomatik güncellemez.\n",
+                "Yeni Compose ayarları için Başlat'a basabilirsiniz.\n",
+                "Yeni EXE için GitHub Actions test ZIP'ini kullanın."
+            ),
             updated
         ))
     }
@@ -506,7 +509,7 @@ mod win {
                     GIT_PULL => {
                         let answer = MessageBoxW(
                             hwnd,
-                            wide("develop/burak-manga dalını sadece fast-forward ile güncelle.\\nYerel değişiklik varsa işlem duracak. Devam edilsin mi?").as_ptr(),
+                            wide("develop/burak-manga dalını sadece fast-forward ile güncelle.\nYerel değişiklik varsa işlem duracak. Devam edilsin mi?").as_ptr(),
                             wide("Git Pull onayı").as_ptr(),
                             MB_YESNO | MB_ICONQUESTION,
                         );
