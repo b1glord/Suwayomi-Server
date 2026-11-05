@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/suwayomi_webui_tr_preview.yml
 # Amac: Pinli Suwayomi-WebUI Turkce onizleme ZIP test artifacti
 # Modul - YAML
-# Version: 0.1.0
+# Version: 0.2.2
 # Aciklama: Ana manga kurulumundan ayri; production release uretmez
 # Bagimli Oldugu Katman: Testing
 name: Suwayomi - Turkish WebUI preview
@@ -51,10 +51,15 @@ jobs:
       - name: Build translated WebUI
         working-directory: webui
         run: pnpm exec vite build
+      - name: Stamp source revision
+        run: |
+          rev=$(git -C webui rev-list --count HEAD)
+          echo "r${rev}" > webui/build/revision
       - name: Verify and package test ZIP
         run: |
           set -euo pipefail
           test -s webui/build/index.html
+          test -s webui/build/revision
           mkdir -p output
           python3 - <<'PY'
           import hashlib
