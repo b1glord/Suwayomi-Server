@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/suwayomi_webui_tr_preview.yml
 # Amac: Pinli Suwayomi-WebUI Turkce onizleme ZIP test artifacti
 # Modul - YAML
-# Version: 0.2.2
+# Version: 0.2.3
 # Aciklama: Ana manga kurulumundan ayri; production release uretmez
 # Bagimli Oldugu Katman: Testing
 name: Suwayomi - Turkish WebUI preview
@@ -28,6 +28,7 @@ jobs:
           repository: Suwayomi/Suwayomi-WebUI
           ref: 020a274e8a35a45195f69210ccac2f3e18502749
           path: webui
+          fetch-depth: 0
           persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -54,6 +55,7 @@ jobs:
       - name: Stamp source revision
         run: |
           rev=$(git -C webui rev-list --count HEAD)
+          test "$rev" -gt 3000
           echo "r${rev}" > webui/build/revision
       - name: Verify and package test ZIP
         run: |
