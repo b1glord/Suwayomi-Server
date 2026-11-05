@@ -2,12 +2,12 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.5.2
+Version: 0.6.0
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.5.2 (Rust)
+# Burak Manga Launcher v0.6.0 (Rust)
 
 Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
 ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
@@ -28,9 +28,9 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 
 ## Islevler
 
-- Baslat: Docker Engine ve Compose konfigrasyonunu kontrol eder, Suwayomi'yi baslatir.
-- Durdur: Sadece ilgili Suwayomi servisini durdurur.
-- Yeniden Baslat: Sadece ilgili Suwayomi servisini yeniden baslatir.
+- Baslat: Docker Engine ve Compose kontrolunden sonra Suwayomi ile uc yardimci servisini baslatir.
+- Durdur: Suwayomi, cf-router, Byparr ve FlareSolverr servislerini birlikte durdurur.
+- Yeniden Baslat: Ayni dort servisi birlikte yeniden baslatir.
 - Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
 - WebUI: Yerel http://127.0.0.1:4567 adresini acar.
 - Katalog: Rüya Manga ve Merlin Scans imzali katalog URL'sini kopyalar ya da acar.
@@ -105,21 +105,20 @@ akis halinde okunur, bellek kullanimi sinirlanir ve timeout korunur.
 Yasam dongusu testi gercek docker suwayomi durumu ve WebUI API'sine
 kullanici bilgisayarinda baglanarak ayrica dogrulanmalidir.
 
-## Cloudflare yardimci servis
+## Otomatik Cloudflare yedeklemesi (v0.6.0)
 
-Docker Compose icinde Byparr v3.0.4 `flaresolverr` adi ile calisir.
-Rust Launcher `Baslat` komutuyla sunucu ve bagimli yardimciyi baslatir;
-`Durdur` ve `Yeniden Baslat` iki servisi birlikte yonetir.
-`Durumu Yenile` her ikisinin calisma durumunu gosterir.
-`Gunlukler` her iki servis icin son 100 satiri acar.
-Yardimci servis internete port acmaz; API'si yalnizca Docker agindadir.
-Kataloglar, indirilmis CBZ dosyalari ve kalici veri volume'u degismez.
-Sunucu basarili baslasa bile Cloudflare erisimi ayri test edilmelidir.
+Rust Launcher, cf-router, Byparr ve FlareSolverr servislerini tek Compose
+stack'i icinde yonetir. Baslat, Durdur, Yeniden Baslat, Durum ve Gunlukler
+islemleri dort servis icindir. Manuel .env secimi veya Compose profile
+gerekmemektedir. Baslatilan stack'te once Byparr, basarisiz GET
+dogrulamasinda ikinci olarak FlareSolverr denenir. Iki servis de basarisiz
+olursa hata doner; otomatik sonsuz tekrar yoktur.
 
-## Secilebilir resmi FlareSolverr
+Indirme Tanilama ekrani, son on dakikalik Docker gunluklerinde
+provider=Byparr / provider=FlareSolverr basari sayilarini ayrica gosterir.
+Bu rakamlar manga bolumu veya Cloudflare asildi garantisi degildir.
+API guvenlik politikalari ve kaynak icerik kullanim kosullari korunur.
 
-Varsayilan Byparr v3.0.4 korunur. Opsiyonel FlareSolverr v3.5.2
-`official-flaresolverr` profili ile sunulur. `config/official-flaresolverr.env.example`
-ornegindeki degerler deployment dizininde `.env` olarak saklandiginda,
-Launcher resmi FlareSolverr'i ek servis olarak baslat/durdur/gunluk
-islemlerine dahil eder. Suwayomi tek yardimci URL'si kullanir.
+Baslatici herhangi bir manga dosyasini, kayitli indirme kuyrugunu veya
+kalici storage klasorunu silmez. Gercek Cloudflare erisimi yerel Docker
+ve kaynak site ile ayrica sinanmalidir.

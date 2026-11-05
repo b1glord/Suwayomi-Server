@@ -2,11 +2,11 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.3.0
+Version: 0.4.0
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
-# Burak Manga Archive - local integration v0.1.0
+# Burak Manga Archive - local integration v0.4.0
 
 This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
@@ -19,9 +19,9 @@ For the complete E: drive setup, data location and safe Windows commands, see
 the runtime Compose configuration or startup script.
 
 Run from the repository root on a machine with Docker Desktop.
-The first start also pulls a separate Byparr Cloudflare helper container.
-Its API is reachable from Suwayomi over the internal Compose network only.
-No extra host port is exposed.
+The first start downloads Byparr, official FlareSolverr and the small Python
+routing service. They run inside this same Compose stack. Only Suwayomi
+port 4567 is published to localhost; helper APIs are internal.
 
 ```powershell
 docker compose -f deploy/burak-manga/compose.yaml config --quiet
@@ -85,94 +85,79 @@ Windows icin native Rust EXE kurulumu ve test artifacti adimlari:
 [LAUNCHER.md](LAUNCHER.md).
 Mevcut Docker Compose ve storage verileri korunur; WPF/PowerShell arayuzu kullanilmaz.
 
-## Cloudflare helper integration (Byparr)
+## Automatic Cloudflare helper failover
 
-Compose now starts the upstream-supported FlareSolverr-compatible Byparr
-service alongside Suwayomi. It uses a pinned published version
-`ghcr.io/thephaseless/byparr:v3.0.4` and URL `http://flaresolverr:8191`.
-Only Suwayomi's WebUI port 4567 is mapped to loopback; the helper has
-**no published host port**.
+The single Docker Compose file always starts four services:
 
-The Docker service is named `flaresolverr` for API compatibility,
-although the image runs Byparr. Suwayomi uses the official environment
-keys `FLARESOLVERR_ENABLED`, `FLARESOLVERR_URL` and
-`FLARESOLVERR_TIMEOUT`. Environment variables override persisted server
-settings when Suwayomi starts; edit Compose for permanent adjustments.
+- suwayomi (official stable server; only localhost:4567 is published)
+- cf-router (internal Python adapter on port 8191; no host port)
+- flaresolverr (Byparr v3.0.4; first-choice helper)
+- flaresolverr-official (FlareSolverr v3.5.2; second-choice helper)
 
-To apply on an existing Windows installation **without deleting downloads**:
+Suwayomi sees one FlareSolverr-compatible URL:
+http://cf-router:8191. The router receives POST /v1 requests, asks
+Byparr first and tries official FlareSolverr on Byparr transport errors,
+timeouts, unsuccessful API status, or a GET challenge response without
+the expected cf_clearance cookie. At most TWO attempts are made per
+GET request. An unsuccessful pair returns an error to Suwayomi; there
+is no indefinite retry loop.
 
-```powershell
-cd E:\Docker\Suwayomi-Server
+For compatibility with Suwayomi, the server timeout is 150 seconds
+and each backend is limited to 60 seconds of solver processing plus
+network overhead. The second helper gets a temporary browser session,
+because persistent session names are backend-local. POST requests and
+session commands are not automatically replayed, to avoid duplicate
+actions. All four services can run simultaneously, but only the helper
+selected by the router handles each attempt. A healthy router does not
+mean that a particular source site is accessible.
+
+### Update existing Windows Docker installation
+
+From the project root, provided git status shows no uncommitted changes:
+
+~~~powershell
+Set-Location 'E:\Docker\Suwayomi-Server'
+git status --short
 git pull --ff-only origin develop/burak-manga
 docker compose -f deploy/burak-manga/compose.yaml config --quiet
-docker compose -f deploy/burak-manga/compose.yaml pull flaresolverr
+docker compose -f deploy/burak-manga/compose.yaml pull
 docker compose -f deploy/burak-manga/compose.yaml up -d
 docker compose -f deploy/burak-manga/compose.yaml ps
-docker compose -f deploy/burak-manga/compose.yaml logs --tail 80 flaresolverr
-```
+docker compose -f deploy/burak-manga/compose.yaml logs --tail 80 cf-router
+~~~
 
-If `git status --short` reports local changes, do not reset the working
-tree. Review and preserve them before pull. **Do not use `down -v`**.
-The existing `storage/Tachidesk` bind mount is unchanged.
-First start can take time while the browser image is downloaded.
+The prior manually selected helper .env values
+(COMPOSE_PROFILES=official-flaresolverr and MANGA_CF_HELPER_URL=...)
+are now ignored by the Compose file and can be removed from local
+.env after checking for other unrelated settings. Do not overwrite
+or automatically delete the file.
 
-Test only one chapter on Merlin Scans or OkuToon before retrying the
-large failed queue. A running helper does **not** guarantee that a given
-website's challenge will be solved; Cloudflare can impose additional
-checks or limitations.
+The stored manga and download queue stay under the same bind mount:
+deploy/burak-manga/storage/Tachidesk. No schema migration or volume
+pruning is involved. Never use docker compose down -v or delete
+the storage folder as part of this update.
 
-If the helper has issues, inspect the service logs. To disable it, set
-`FLARESOLVERR_ENABLED: "false"` in Compose and recreate only Suwayomi
-with `docker compose -f deploy/burak-manga/compose.yaml up -d suwayomi`.
-Do not manually delete manga data. Note that the helper container may
-remain running until stopped with `docker compose stop flaresolverr`.
+To inspect actual routing results:
 
-The upstream documentation is here:
-https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Configuring-Suwayomi%E2%80%90Server.md
+~~~powershell
+docker compose -f deploy/burak-manga/compose.yaml logs --tail 120 cf-router
+~~~
 
-## Optional official FlareSolverr v3.5.2
+The router logs only backend outcomes, such as provider=Byparr outcome=ok
+or provider=FlareSolverr outcome=ok. It deliberately does not record
+source URLs, browser cookies, request bodies or upstream exceptions.
+The health route /health only means the router process is running.
 
-The existing Byparr v3.0.4 remains the DEFAULT helper.
-Official FlareSolverr is a second, **opt-in** Docker service with profile
-`official-flaresolverr`. The Suwayomi server uses only one helper URL
-at a time: it does not automatically fall back between engines.
-In official mode Byparr may remain running as the base dependency, but
-the selected endpoint is the official service. Neither service publishes
-port 8191 on the host.
+Test with ONE manga chapter before retrying a failed backlog. Neither
+helper guarantees Cloudflare verification will succeed on every source.
+The combined fallback can take up to around two minutes when both
+helpers time out. A WebUI/docker end-to-end acceptance test is required
+on the actual Windows host.
 
-### Select official FlareSolverr
+### Rollback
 
-From the deployment directory in PowerShell:
-
-```powershell
-Set-Location E:\Docker\Suwayomi-Server\deploy\burak-manga
-# If .env already exists, inspect it and merge settings; never overwrite it.
-if (Test-Path -LiteralPath .\.env) {
-    throw 'Existing .env detected; merge settings manually before switching.'
-}
-Copy-Item .\config\official-flaresolverr.env.example .\.env
-docker compose -f compose.yaml config --quiet
-docker compose -f compose.yaml pull flaresolverr-official
-docker compose -f compose.yaml up -d
-docker compose -f compose.yaml ps
-docker compose -f compose.yaml logs --tail 80 flaresolverr-official
-```
-
-The `.env` file is local and ignored by Git. The Rust Launcher executes
-Compose from this same directory. The server's environment URL is now
-configurable with `MANGA_CF_HELPER_URL`, defaulting to Byparr.
-
-### Switch back to Byparr
-
-If the `.env` file was created only for this setting (and contains no
-other overrides), from the deployment directory:
-
-```powershell
-Rename-Item .\.env .\.env.flaresolverr.disabled
-docker compose -f compose.yaml up -d
-docker compose --profile official-flaresolverr -f compose.yaml stop flaresolverr-official
-```
-
-Keep your downloaded manga and queue: do not use `down -v` or delete
-`storage/Tachidesk`. Test a single chapter before retrying large queues.
-FlareSolverr might not solve every challenge. It has extra browser RAM use.
+If the updated stack fails to start, restore the last previously working
+compose.yaml from version control, leaving storage/Tachidesk unchanged,
+then execute docker compose up -d. Do not reset uncommitted files or
+delete existing manga. For a quick diagnostic without any download
+retries, use docker compose ps and docker compose logs.
