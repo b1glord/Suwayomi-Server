@@ -2,11 +2,11 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.5.0
+Version: 0.5.1
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
-# Burak Manga Archive - local integration v0.5.0
+# Burak Manga Archive - local integration v0.5.1
 
 This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
@@ -184,6 +184,14 @@ delete existing manga. For a quick diagnostic without any download
 retries, use docker compose ps and docker compose logs.
 
 ## Turkce WebUI test kurulumu (geri alinabilir)
+
+Rust Launcher v0.8.0 artik `Turkce Paketi Al`, `Turkce WebUI Kur`
+ve `Turkceyi Geri Al` dugmelerini sunuyor. Windows kullanicilari
+asagidaki komutlari manuel yazmak yerine GUI'yi kullanabilir.
+[LAUNCHER.md](LAUNCHER.md) icindeki Turkce WebUI dugmeleri bolumune
+bakin. Asagidaki PowerShell komutlari Docker auth veya GUI sorunlarinda
+manuel fallback'tir.
+
 
 Suwayomi-WebUI upstream'in Turkce katalogu su anda normal dil listesinde
 yer almiyor. Ayrica hazirlanmis Turkce preview paketinde dil kaydi etkin

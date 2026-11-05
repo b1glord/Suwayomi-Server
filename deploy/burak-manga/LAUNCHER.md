@@ -2,15 +2,17 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.7.1
+Version: 0.8.0
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.7.0 (Rust)
+# Burak Manga Launcher v0.8.0 (Rust)
 
-Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
-ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
+Windows 10/11 x64 icin yerel Win32 arayuzu. WPF, WebView ve Rust SDK
+kurulumu gerektirmez. Turkce WebUI kurulum islemleri icin Windows ile
+gelen PowerShell kullanilir; GUI Rust ile yazilmistir. Docker Desktop
+Linux engine gereklidir.
 
 ## Indirme ve baslatma
 
@@ -34,6 +36,9 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 - Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
 - Git Pull: Secili fork'un develop/burak-manga dalini yalnizca fast-forward ile gunceller; once onay alir.
 - WebUI: Yerel http://127.0.0.1:4567 adresini acar.
+- Turkce Paketi Al: En son basarili Turkce WebUI test paketini bulmak icin GitHub Actions sayfasini acar.
+- Turkce WebUI Kur: Paket ZIP'ini Windows dosya secicisinden alir, hash/on kosul dogrular; yedekli kurar.
+- Turkceyi Geri Al: En son orijinal WebUI yedegini geri yukler. Her iki islem de onay gerektirir.
 - Katalog: Rüya Manga ve Merlin Scans imzali katalog URL'sini kopyalar ya da acar.
 - Arsiv: storage/Tachidesk/downloads altindaki CBZ dosyalarini, CBZ bulunan manga klasoru sayisini ve tum indirme dosyalarinin kapladigi boyutu gosterir.
 - Arsiv klasorunu ac: Mevcut indirme dizinini Windows Explorer'da acar, veri olusturmaz veya silmez.
@@ -146,8 +151,52 @@ Yeni kod derleme artifakti GitHub Actions uzerinden ayrica edinilmelidir.
 Yerel launcher EXE'si `.gitignore` kapsaminda tutularak kaydedilmemis
 manga verileri ve diger kullanici dosyalari korunur.
 
-## Turkce WebUI
+## Turkce WebUI butonlari (v0.8.0)
 
-Rust Launcher arayuzu farkli, Suwayomi'nin tarayici WebUI dili farklidir.
-WebUI Turkce test paketini kurmak icin README.md > Turkce WebUI test
-kurulumu bolumunu takip edin. Launcher veya Docker image yeniden derlenmez.
+Rust Launcher Turkce WebUI'yi kontrol edilen bir Windows PowerShell alt
+isleminde yonetir; arayuz Rust/Win32 kalir. EXE'nin yeni surumunu GitHub
+Actions **Burak Manga - Rust launcher** test ZIP'inden alip compose.yaml
+yanina kopyalayin. Git Pull ile
+deploy/burak-manga/scripts/install-turkish-webui.ps1 dosyasinin
+guncel oldugunu dogrulayin. Script bulunamazsa islem veri degistirmeden
+hata verir.
+
+1. WebUI > Settings > WebUI > Flavor alanini **Custom** secip kaydedin.
+   Launcher bu ayari kendiliginden degistirmez.
+2. Launcher'da **Turkce Paketi Al** ile
+   Suwayomi - Turkish WebUI preview workflow sayfasini acin. En yeni
+   basarili workflow'un Artifacts bolumundeki paketi indirin. Dis artifact
+   ZIP'ini acin. **Suwayomi-WebUI-TR-preview.zip** ve
+   **SHA256SUMS.txt** dosyalari ayni klasorde bulunmalidir.
+3. **Turkce WebUI Kur** dugmesine basin, onay verin ve ic ZIP dosyasini
+   Windows dosya secicisinden secin. On kontrolu basarisiz olursa
+   calisan konteynerlere dokunulmaz.
+4. Basariliysa sadece suwayomi durur, script mevcut webUI klasorunu
+   webui-tr-backups altinda saklar, test paketini kurar, suwayomi
+   yeniden baslatilir (onceden calisiyorsa). cf-router/Byparr/FlareSolverr
+   yeniden baslatilmaz. Suwayomi baslamadiysa kapali birakilir.
+5. WebUI sayfasinda App Language alaninda Turkceyi secin. Dil
+   secilmisse ama menu degismiyorsa Ctrl+F5 ile yenileyin.
+
+**Turkceyi Geri Al:** Son yedek okunabilirligini onceden denetler;
+onaydan sonra ayni hizmet-durdur/geri-yukle/islet akisini izler.
+Orijinal UI yedeklenmeden silinmez. Turkce WebUI dosyalari da
+webui-tr-backups altina tasinir. Gerekirse WebUI > Flavor = WebUI
+ayarina geri donulabilir.
+
+Yalnizca pinli upstream'den derlenen test arayuzudur, production
+release degildir. Turkce eksik metinler kalabilir. CI artifact'i sureli
+saklanir; kimlik dogrulamasi gereken GitHub Actions artifact'ini
+Launcher kullanici yerine token ile indirmez. ZIP'in SHA256 kontrolu
+saglanir; yayinlayici kimligi icin GitHub run kaynagini kullanin.
+
+Her iki islemden once Launcher stopDownloader GraphQL mutasyonunu
+dogrular. Bu adim API yetkilendirmesi nedeniyle basarisizsa Suwayomi
+durdurulmaz; WebUI'den manuel duraklatin, gerekirse README'deki
+manuel kurulum yolunu kullanin. **Suwayomi yeniden baslarken indirme
+kuyrugu otomatik devam edebilir**; kurulum sonrasinda Download
+durumunu kontrol edin. Queue/DB/CBZ otomatik silinmez.
+
+Gercek Windows Docker WebUI geri alma islemi kullanici ortaminda
+ayrica test edilmelidir; CI birim/portable layout testleri bu testi
+kapsamaz.
