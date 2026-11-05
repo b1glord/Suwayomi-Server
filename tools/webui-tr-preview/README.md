@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/tools/webui-tr-preview/README.md
 Amac: Turkce WebUI test derlemesinin kullanimi ve upstream katki yolu
 Modul - Markdown
-Version: 0.1.0
+Version: 0.2.0
 Aciklama: WebUI derleme test artifacti; kalici ceviri Weblate akisidir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -42,3 +42,12 @@ upstream'e PR olarak gonderilmemelidir.
 
 Cloudflare sorunu, manga indirme kuyrugu, eklenti sertifikalari
 ve sunucu otomatik guncellemeleri bu testin kapsami disindadir.
+
+## Ilk ceviri taslagi
+
+tr-suggestions.mjs icinde 176 yeni arayuz metni cevirisi vardir.
+Bunlar mevcut Weblate katalogundaki eksik, degiskensiz (ICU placeholdersiz)
+metinlerden secildi; yalniz test onizlemesinde PO'ya eklenir. Diger
+ceviri dosyalarini veya upstream kaynaklarini dogrudan degistirmez.
+Resmi katki icin ana dil sahipleri ve Weblate duzenleyicileri tarafindan
+terimlerin ve baglamin gozden gecirilmesi gerekir.
