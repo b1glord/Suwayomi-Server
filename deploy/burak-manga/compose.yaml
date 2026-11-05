@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/compose.yaml
 # Amac: Tek Docker Compose icinde Byparr -> FlareSolverr otomatik yedekleme
 # Modul - YAML
-# Version: 0.4.0
+# Version: 0.4.1
 # Aciklama: Suwayomi sadece cf-router URL'sini kullanir; veri volume'u korunur
 # Bagimli Oldugu Katman: Infrastructure
 services:
@@ -55,8 +55,9 @@ services:
         max-file: "3"
 
   flaresolverr:
-    # First attempt: Byparr compatible API.
-    image: ghcr.io/thephaseless/byparr:v3.0.4
+    # First attempt: Byparr compatible API. Upstream publishes :latest, not :v3.0.4.
+    # Remote manifest checked by Burak Manga CI before deployment.
+    image: ghcr.io/thephaseless/byparr:latest
     environment:
       TZ: Europe/Istanbul
     shm_size: "512mb"

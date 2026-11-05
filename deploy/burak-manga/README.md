@@ -2,11 +2,11 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.4.0
+Version: 0.4.1
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
-# Burak Manga Archive - local integration v0.4.0
+# Burak Manga Archive - local integration v0.4.1
 
 This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
@@ -91,7 +91,7 @@ The single Docker Compose file always starts four services:
 
 - suwayomi (official stable server; only localhost:4567 is published)
 - cf-router (internal Python adapter on port 8191; no host port)
-- flaresolverr (Byparr v3.0.4; first-choice helper)
+- flaresolverr (Byparr official image :latest; first-choice helper)
 - flaresolverr-official (FlareSolverr v3.5.2; second-choice helper)
 
 Suwayomi sees one FlareSolverr-compatible URL:
@@ -110,6 +110,19 @@ session commands are not automatically replayed, to avoid duplicate
 actions. All four services can run simultaneously, but only the helper
 selected by the router handles each attempt. A healthy router does not
 mean that a particular source site is accessible.
+
+### Resolve missing Byparr image tag
+
+Do not use ghcr.io/thephaseless/byparr:v3.0.4: that image tag was
+never confirmed as published. Byparr's official Compose uses the
+ghcr.io/thephaseless/byparr:latest tag. The tag can advance between
+deployments; CI checks the referenced remote container manifests on
+each Compose change. FlareSolverr remains pinned to v3.5.2.
+
+When an unavailable image prevents a Compose startup, Docker may report
+other images as "Interrupted" or "No such image". Those messages do not
+prove the secondary images are unavailable: the original pull stopped
+before they finished. Fix the first failing reference, then pull again.
 
 ### Update existing Windows Docker installation
 

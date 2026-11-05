@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_validate.yml
 # Amac: Manga arsivi dosyalarini yalnizca PR esnasinda dogrular
 # Modul - YAML
-# Version: 0.1.0
+# Version: 0.2.0
 # Aciklama: Unit test, kaynak kaydi ve Compose statik kontrolu; release yok
 # Bagimli Oldugu Katman: Testing
 name: Burak Manga - validate
@@ -29,6 +29,20 @@ jobs:
         run: python -m unittest discover -s deploy/burak-manga/tests -v
       - name: Compose static config
         run: docker compose -f deploy/burak-manga/compose.yaml config --quiet
+      - name: Verify referenced public container image manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          images=(
+            'ghcr.io/suwayomi/suwayomi-server:stable'
+            'python:3.13-alpine'
+            'ghcr.io/thephaseless/byparr:latest'
+            'ghcr.io/flaresolverr/flaresolverr:v3.5.2'
+          )
+          for img in "${images[@]}"; do
+            echo "Checking remote image manifest: $img"
+            timeout 90s docker buildx imagetools inspect "$img" >/dev/null
+          done
       - name: Parse Windows startup PowerShell (syntax only)
         shell: pwsh
         run: |
