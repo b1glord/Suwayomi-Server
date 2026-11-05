@@ -2,11 +2,11 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.4.1
+Version: 0.4.2
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
-# Burak Manga Archive - local integration v0.4.1
+# Burak Manga Archive - local integration v0.4.2
 
 This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
@@ -86,6 +86,14 @@ Windows icin native Rust EXE kurulumu ve test artifacti adimlari:
 Mevcut Docker Compose ve storage verileri korunur; WPF/PowerShell arayuzu kullanilmaz.
 
 ## Automatic Cloudflare helper failover
+
+Byparr includes an upstream Docker healthcheck with a 15-minute
+interval. It may show `health: starting` for a long time even when the
+API is already serving requests, especially if the first check ran
+during GeoIP initialization. The deployment overrides this with a
+30-second check against `/health`, a 3-minute startup grace period
+and three retries. This improves state reporting but does not
+guarantee source-site downloads. Other services are unchanged.
 
 The single Docker Compose file always starts four services:
 

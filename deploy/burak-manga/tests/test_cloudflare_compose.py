@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/tests/test_cloudflare_compose.py
 # Amac: Iki backend ve router icin tek Compose kontratini kontrol eder
 # Modul - Python
-# Version: 0.4.1
+# Version: 0.4.2
 # Aciklama: API URL, servis bagimliligi, host port ve veri koruma testleri
 # Bagimli Oldugu Katman: Testing
 import json
@@ -41,6 +41,13 @@ class CloudflareComposeTest(unittest.TestCase):
         self.assertIn("flaresolverr-official", gateway["depends_on"])
         self.assertTrue(gateway["read_only"])
         self.assertEqual(services["flaresolverr"]["image"], "ghcr.io/thephaseless/byparr:latest")
+        health = services["flaresolverr"]["healthcheck"]
+        self.assertEqual(health["test"], [
+            "CMD", "curl", "-fsS", "http://127.0.0.1:8191/health",
+        ])
+        self.assertIn("interval", health)
+        self.assertIn("start_period", health)
+        self.assertIn("timeout", health)
         self.assertEqual(services["flaresolverr-official"]["image"], "ghcr.io/flaresolverr/flaresolverr:v3.5.2")
         for name in ("cf-router", "flaresolverr", "flaresolverr-official"):
             self.assertFalse(services[name].get("ports"))

@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/compose.yaml
 # Amac: Tek Docker Compose icinde Byparr -> FlareSolverr otomatik yedekleme
 # Modul - YAML
-# Version: 0.4.1
+# Version: 0.4.2
 # Aciklama: Suwayomi sadece cf-router URL'sini kullanir; veri volume'u korunur
 # Bagimli Oldugu Katman: Infrastructure
 services:
@@ -61,6 +61,14 @@ services:
     environment:
       TZ: Europe/Istanbul
     shm_size: "512mb"
+    # Upstream healthcheck runs every 15m; check readiness sooner.
+    # GeoIP/egress discovery can take time on cold starts.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 3m
+      retries: 3
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
