@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.1.0
+Version: 0.2.0
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
@@ -18,7 +18,10 @@ For the complete E: drive setup, data location and safe Windows commands, see
 [WINDOWS-E-DRIVE.md](WINDOWS-E-DRIVE.md). No fixed drive is hardcoded in
 the runtime Compose configuration or startup script.
 
-Run from the repository root on a machine with Docker Desktop:
+Run from the repository root on a machine with Docker Desktop.
+The first start also pulls a separate Byparr Cloudflare helper container.
+Its API is reachable from Suwayomi over the internal Compose network only.
+No extra host port is exposed.
 
 ```powershell
 docker compose -f deploy/burak-manga/compose.yaml config --quiet
@@ -71,7 +74,7 @@ Source candidates live in deploy/burak-manga/config/sources.json.
 Only extension source code presence was established. Actual site access,
 site permissions, extension runtime, and server GUI smoke checks remain
 unverified. The Docker CLI is needed for Compose validation and
-container testing. Use permitted content only; no DRM/CAPTCHA bypass.
+container testing. Use sources responsibly and respect the sites' terms and content rights.
 
 For the architecture decision, see docs/decisions/0001-suwayomi.md in
 this directory.
@@ -81,3 +84,48 @@ this directory.
 Windows icin native Rust EXE kurulumu ve test artifacti adimlari:
 [LAUNCHER.md](LAUNCHER.md).
 Mevcut Docker Compose ve storage verileri korunur; WPF/PowerShell arayuzu kullanilmaz.
+
+## Cloudflare helper integration (Byparr)
+
+Compose now starts the upstream-supported FlareSolverr-compatible Byparr
+service alongside Suwayomi. It uses a pinned published version
+`ghcr.io/thephaseless/byparr:v3.0.4` and URL `http://flaresolverr:8191`.
+Only Suwayomi's WebUI port 4567 is mapped to loopback; the helper has
+**no published host port**.
+
+The Docker service is named `flaresolverr` for API compatibility,
+although the image runs Byparr. Suwayomi uses the official environment
+keys `FLARESOLVERR_ENABLED`, `FLARESOLVERR_URL` and
+`FLARESOLVERR_TIMEOUT`. Environment variables override persisted server
+settings when Suwayomi starts; edit Compose for permanent adjustments.
+
+To apply on an existing Windows installation **without deleting downloads**:
+
+```powershell
+cd E:\Docker\Suwayomi-Server
+git pull --ff-only origin develop/burak-manga
+docker compose -f deploy/burak-manga/compose.yaml config --quiet
+docker compose -f deploy/burak-manga/compose.yaml pull flaresolverr
+docker compose -f deploy/burak-manga/compose.yaml up -d
+docker compose -f deploy/burak-manga/compose.yaml ps
+docker compose -f deploy/burak-manga/compose.yaml logs --tail 80 flaresolverr
+```
+
+If `git status --short` reports local changes, do not reset the working
+tree. Review and preserve them before pull. **Do not use `down -v`**.
+The existing `storage/Tachidesk` bind mount is unchanged.
+First start can take time while the browser image is downloaded.
+
+Test only one chapter on Merlin Scans or OkuToon before retrying the
+large failed queue. A running helper does **not** guarantee that a given
+website's challenge will be solved; Cloudflare can impose additional
+checks or limitations.
+
+If the helper has issues, inspect the service logs. To disable it, set
+`FLARESOLVERR_ENABLED: "false"` in Compose and recreate only Suwayomi
+with `docker compose -f deploy/burak-manga/compose.yaml up -d suwayomi`.
+Do not manually delete manga data. Note that the helper container may
+remain running until stopped with `docker compose stop flaresolverr`.
+
+The upstream documentation is here:
+https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Configuring-Suwayomi%E2%80%90Server.md

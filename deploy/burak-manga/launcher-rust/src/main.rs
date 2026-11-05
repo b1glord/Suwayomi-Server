@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.5.0
+// Version: 0.5.1
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -24,10 +24,10 @@ impl Action {
         let mut args = vec![OsString::from("compose"), OsString::from("-f"), file.as_os_str().to_owned()];
         let suffix: &[&str] = match self {
             Self::Start => &["up", "-d", "suwayomi"],
-            Self::Stop => &["stop", "suwayomi"],
-            Self::Restart => &["restart", "suwayomi"],
+            Self::Stop => &["stop", "suwayomi", "flaresolverr"],
+            Self::Restart => &["restart", "flaresolverr", "suwayomi"],
             Self::Status => &["ps", "--status", "running", "--services"],
-            Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi"],
+            Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi", "flaresolverr"],
             Self::Archive | Self::Diagnostics | Self::PauseDownloads => &[],
         };
         args.extend(suffix.iter().map(OsString::from));
@@ -338,8 +338,11 @@ mod win {
         let time = if action == Action::Start { Duration::from_secs(180) } else { Duration::from_secs(45) };
         let response = docker(&action.args(compose), compose, time)?;
         if action == Action::Status {
-            if response.lines().any(|s| s.trim() == "suwayomi") { Ok("Suwayomi CALISIYOR".into()) }
-            else { Ok("Suwayomi DURDURULMUS".into()) }
+            let suwayomi_up = response.lines().any(|s| s.trim() == "suwayomi");
+            let helper_up = response.lines().any(|s| s.trim() == "flaresolverr");
+            let server = if suwayomi_up { "Suwayomi CALISIYOR" } else { "Suwayomi DURDURULMUS" };
+            let helper = if helper_up { "Cloudflare yardimcisi CALISIYOR" } else { "Cloudflare yardimcisi DURDURULMUS" };
+            Ok(format!("{server} | {helper}"))
         } else { Ok(response) }
     }
 
@@ -553,6 +556,18 @@ mod tests {
             assert_eq!(words[2], "E:/Ornek Klasor/compose.yaml");
             assert!(!words.iter().any(|s| ["down", "-v", "prune", "rm", "pull"].contains(&s.as_str())));
         }
+    }
+    #[test]
+    fn helper_is_started_as_dependency_and_managed_with_server() {
+        let config = Path::new("E:/Manga Repo/compose.yaml");
+        let tokens = |action: Action| -> Vec<String> {
+            action.args(config).iter().map(|v| v.to_string_lossy().into_owned()).collect()
+        };
+        assert_eq!(&tokens(Action::Start)[3..], &["up", "-d", "suwayomi"]);
+        assert_eq!(&tokens(Action::Stop)[3..], &["stop", "suwayomi", "flaresolverr"]);
+        assert_eq!(&tokens(Action::Restart)[3..], &["restart", "flaresolverr", "suwayomi"]);
+        assert_eq!(&tokens(Action::Logs)[3..],
+            &["logs", "--tail", "100", "--no-color", "suwayomi", "flaresolverr"]);
     }
     #[test]
     fn missing_compose_fails_clearly() {

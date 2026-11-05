@@ -21,8 +21,11 @@ testing-ci.md and portable-paths.md plus applicable platform rules before change
 - deploy/burak-manga is a separate local archive integration. Docker Compose currently runs
   the official upstream stable image, NOT an image compiled from this fork.
 - Never commit downloaded manga, runtime data, passwords, tokens, or site credentials.
-- Treat websites and third-party extensions as untrusted. Do not bypass access controls,
-  CAPTCHA, DRM or other restrictions. Check permissions before downloading content.
+- Treat websites and third-party extensions as untrusted. Supported Suwayomi
+  integration with open-source Cloudflare helper services (FlareSolverr/Byparr)
+  is permitted in this local deployment when explicitly enabled and tested.
+  Respect website usage terms, content rights and DRM restrictions; never
+  weaken authentication, exfiltrate cookies or commit site credentials.
 - Run focused local tests first, then use GitHub CI as needed. Never report skipped
   Docker/runtime, application smoke, or external integration checks as passed.
 - Preserve existing working behavior, real project paths and documentation.

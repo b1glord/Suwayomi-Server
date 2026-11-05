@@ -2,12 +2,12 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.5.0
+Version: 0.5.1
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.5.0 (Rust)
+# Burak Manga Launcher v0.5.1 (Rust)
 
 Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
 ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
@@ -104,3 +104,14 @@ Docker gunlukleri buyuk oldugunda stdout ve stderr ayri worker'larda
 akis halinde okunur, bellek kullanimi sinirlanir ve timeout korunur.
 Yasam dongusu testi gercek docker suwayomi durumu ve WebUI API'sine
 kullanici bilgisayarinda baglanarak ayrica dogrulanmalidir.
+
+## Cloudflare yardimci servis
+
+Docker Compose icinde Byparr v3.0.4 `flaresolverr` adi ile calisir.
+Rust Launcher `Baslat` komutuyla sunucu ve bagimli yardimciyi baslatir;
+`Durdur` ve `Yeniden Baslat` iki servisi birlikte yonetir.
+`Durumu Yenile` her ikisinin calisma durumunu gosterir.
+`Gunlukler` her iki servis icin son 100 satiri acar.
+Yardimci servis internete port acmaz; API'si yalnizca Docker agindadir.
+Kataloglar, indirilmis CBZ dosyalari ve kalici veri volume'u degismez.
+Sunucu basarili baslasa bile Cloudflare erisimi ayri test edilmelidir.
