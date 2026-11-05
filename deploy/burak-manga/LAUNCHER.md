@@ -2,12 +2,12 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.6.0
+Version: 0.7.0
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.6.0 (Rust)
+# Burak Manga Launcher v0.7.0 (Rust)
 
 Windows 10/11 x64 icin yerel Win32 arayuzu. PowerShell, WPF, WebView
 ve Rust SDK kurulumu gerektirmez. Docker Desktop Linux engine gereklidir.
@@ -32,6 +32,7 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 - Durdur: Suwayomi, cf-router, Byparr ve FlareSolverr servislerini birlikte durdurur.
 - Yeniden Baslat: Ayni dort servisi birlikte yeniden baslatir.
 - Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
+- Git Pull: Secili fork'un develop/burak-manga dalini yalnizca fast-forward ile gunceller; once onay alir.
 - WebUI: Yerel http://127.0.0.1:4567 adresini acar.
 - Katalog: Rüya Manga ve Merlin Scans imzali katalog URL'sini kopyalar ya da acar.
 - Arsiv: storage/Tachidesk/downloads altindaki CBZ dosyalarini, CBZ bulunan manga klasoru sayisini ve tum indirme dosyalarinin kapladigi boyutu gosterir.
@@ -122,3 +123,25 @@ API guvenlik politikalari ve kaynak icerik kullanim kosullari korunur.
 Baslatici herhangi bir manga dosyasini, kayitli indirme kuyrugunu veya
 kalici storage klasorunu silmez. Gercek Cloudflare erisimi yerel Docker
 ve kaynak site ile ayrica sinanmalidir.
+
+## Git Pull dugmesi (v0.7.0)
+
+Git Pull, Windows Git CLI'yi arka plan worker'inda kullanir; PowerShell
+ve shell scripti gerektirmez. Dugmeye basildiginda kullanicidan onay alinir.
+Klasor, sabit disk harfi veya CWD tahminiyle degil EXE'nin yanindaki
+compose.yaml dosyasinin ust dizinlerinden cozulur.
+
+Guncellemeden once Git'in gercek repo root'u, aktif branch,
+`origin` deposunun GitHub adresi ve `git status --porcelain` cikisi
+dogrulanir. Beklenen repository `b1glord/Suwayomi-Server`; branch
+`develop/burak-manga`. Degisiklik varsa `git pull --ff-only origin
+develop/burak-manga` **calistirilmaz**. Branch degistirme, `reset`,
+`stash`, `checkout`, kuvvetli pull veya otomatik merge yoktur.
+
+Git CLI erisilemez ya da yetkilendirme gerekirse guvenli sekilde hata
+doner. Git Pull sadece kaynak kodu gunceller: Docker image'ini cekmez,
+Compose konteynerlerini baslatmaz, Rust EXE'nin kendisini degistirmez.
+Yeni kod derleme artifakti GitHub Actions uzerinden ayrica edinilmelidir.
+
+Yerel launcher EXE'si `.gitignore` kapsaminda tutularak kaydedilmemis
+manga verileri ve diger kullanici dosyalari korunur.

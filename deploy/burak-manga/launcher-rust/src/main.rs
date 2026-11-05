@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.6.0
+// Version: 0.7.0
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -11,13 +11,14 @@ use std::path::{Path, PathBuf};
 
 mod archive;
 mod diagnostics;
+mod git_update;
 
 const CATALOG: &str = "https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb";
 const WEB: &str = "http://127.0.0.1:4567";
 const OKUTOON_MARTIAL_PEAK: &str = "https://okutoon.com/martial-peak";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads }
+enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads, GitPull }
 
 impl Action {
     fn args(self, file: &Path) -> Vec<OsString> {
@@ -29,7 +30,7 @@ impl Action {
             Self::Restart => &["restart", "flaresolverr", "flaresolverr-official", "cf-router", "suwayomi"],
             Self::Status => &["ps", "--status", "running", "--services"],
             Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi", "cf-router", "flaresolverr", "flaresolverr-official"],
-            Self::Archive | Self::Diagnostics | Self::PauseDownloads => &[],
+            Self::Archive | Self::Diagnostics | Self::PauseDownloads | Self::GitPull => &[],
         };
         args.extend(suffix.iter().map(OsString::from));
         args
@@ -44,6 +45,7 @@ impl Action {
             Self::Archive => "Arşiv istatistikleri",
             Self::Diagnostics => "İndirme tanılama",
             Self::PauseDownloads => "İndirmeleri duraklatma",
+            Self::GitPull => "Git Pull",
         }
     }
 }
@@ -63,7 +65,7 @@ fn compose_file(exe: &Path) -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 mod win {
-    use super::{archive, diagnostics, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
+    use super::{archive, diagnostics, git_update, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
     use std::collections::HashMap;
     use std::ffi::{OsStr, OsString};
     use std::mem;
@@ -104,6 +106,7 @@ mod win {
     const DIAG_REFRESH: usize = 123;
     const GUARD_TOGGLE: usize = 124;
     const PAUSE_DOWNLOADS: usize = 125;
+    const GIT_PULL: usize = 126;
     const DIAG_POLL_INTERVAL: Duration = Duration::from_secs(60);
     const TIMER_ID: usize = 5;
     const GUI_SMOKE_TIMER: usize = 6;
@@ -169,13 +172,20 @@ mod win {
                 let output = if let Some(ref data) = health {
                     Ok(diagnostics::summary(data))
                 } else { raw };
-                let status = if action == Action::Status { output.clone() } else { perform(Action::Status, &path) };
+                let status = if action == Action::GitPull {
+                    Ok(String::new())
+                } else if action == Action::Status {
+                    output.clone()
+                } else {
+                    perform(Action::Status, &path)
+                };
                 let _ = tx.send(Done { action, output, status, health });
             });
         }
         fn poll(&mut self) {
             while let Ok(done) = self.receiver.try_recv() {
                 self.busy = false;
+                let git_ok = done.action == Action::GitPull && done.output.is_ok();
                 match done.output {
                     Ok(output) => {
                         match done.action {
@@ -199,7 +209,15 @@ mod win {
                         self.log(&format!("{} HATASI:\r\n\r\n{reason}", done.action.title()));
                     }
                 }
-                self.label(&done.status.unwrap_or_else(|e| format!("Docker baglantisi yok: {e}")));
+                if done.action == Action::GitPull {
+                    self.label(if git_ok {
+                        "Git Pull tamamlandı. Docker için Başlat düğmesini kullanın."
+                    } else {
+                        "Git Pull başarısız. Ayrıntılar işlem günlüğünde."
+                    });
+                } else {
+                    self.label(&done.status.unwrap_or_else(|e| format!("Docker baglantisi yok: {e}")));
+                }
                 if done.action == Action::Status {
                     self.launch(Action::Archive);
                 } else if done.action == Action::Archive {
@@ -231,12 +249,18 @@ mod win {
         Ok(output)
     }
 
-    fn docker(args: &[OsString], compose: &Path, limit: Duration) -> Result<String, String> {
-        let root = compose.parent().ok_or("COMPOSE_PARENT_MISSING")?;
-        let mut child = Command::new("docker")
+    fn run_process(
+        program: &str, args: &[OsString], root: &Path, limit: Duration,
+    ) -> Result<String, String> {
+        let mut command = Command::new(program);
+        if program == "git" {
+            // Avoid interactive credential prompts inside a background GUI worker.
+            command.env("GIT_TERMINAL_PROMPT", "0");
+        }
+        let mut child = command
             .args(args).current_dir(root).creation_flags(0x0800_0000)
             .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
-            .spawn().map_err(|e| format!("Docker Desktop bulunamadi veya baslatilamadi: {e}"))?;
+            .spawn().map_err(|e| format!("{program} baslatilamadi: {e}"))?;
         // Drain both pipes concurrently: large stack traces otherwise fill pipe buffers
         // before try_wait completes and make the GUI report a false timeout.
         let stdout = child.stdout.take().ok_or("DOCKER_STDOUT_MISSING")?;
@@ -266,7 +290,38 @@ mod win {
         let out = String::from_utf8_lossy(&out);
         let err = String::from_utf8_lossy(&err);
         let combined = format!("{out}\n{err}").trim().to_owned();
-        if !status.success() { Err(format!("DOCKER_COMMAND_FAILED: {combined}")) } else { Ok(combined) }
+        if !status.success() { Err(format!("{program}_COMMAND_FAILED: {combined}")) } else { Ok(combined) }
+    }
+
+    fn docker(args: &[OsString], compose: &Path, limit: Duration) -> Result<String, String> {
+        let root = compose.parent().ok_or("COMPOSE_PARENT_MISSING")?;
+        run_process("docker", args, root, limit)
+    }
+
+    fn git(args: &[&str], root: &Path, limit: Duration) -> Result<String, String> {
+        let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+        run_process("git", &args, root, limit)
+    }
+
+    fn git_pull(compose: &Path) -> Result<String, String> {
+        const CHECK_TIMEOUT: Duration = Duration::from_secs(20);
+        let repo = git_update::repository_root(compose)?;
+        let actual = git(&["rev-parse", "--show-toplevel"], &repo, CHECK_TIMEOUT)?;
+        let branch = git(&["branch", "--show-current"], &repo, CHECK_TIMEOUT)?;
+        let origin = git(&["remote", "get-url", "origin"], &repo, CHECK_TIMEOUT)?;
+        let status = git(
+            &["status", "--porcelain=v1", "--untracked-files=normal"],
+            &repo, CHECK_TIMEOUT,
+        )?;
+        git_update::validate(&repo, &actual, &branch, &origin, &status)?;
+        let updated = git(&git_update::pull_arguments(), &repo, Duration::from_secs(150))?;
+        Ok(format!(
+            "Git Pull tamamlandı (fast-forward only):\\n{}\\n\\n\\
+             Bu işlem Docker image veya Launcher EXE dosyasını otomatik güncellemez. \\
+             Yeni Compose ayarları için Başlat'a basabilirsiniz. \\
+             Yeni EXE için GitHub Actions test ZIP'ini kullanın.",
+            updated
+        ))
     }
 
     fn pause_downloads() -> Result<String, String> {
@@ -306,6 +361,9 @@ mod win {
         Ok(())
     }
     fn perform(action: Action, compose: &Path) -> Result<String, String> {
+        if action == Action::GitPull {
+            return git_pull(compose);
+        }
         if action == Action::PauseDownloads {
             return pause_downloads();
         }
@@ -364,7 +422,7 @@ mod win {
         make(hwnd, state, STATUS, "STATIC", "Sunucu durumu kontrol ediliyor...", 0, 0);
         for (id, caption) in [
             (START, "Başlat"), (STOP, "Durdur"), (RESTART, "Yeniden Başlat"), (REFRESH, "Durumu Yenile"),
-            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç"),
+            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (GIT_PULL, "Git Pull"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç"),
             (ARCHIVE_OPEN, "Arşiv Klasörünü Aç"), (ARCHIVE_REFRESH, "Arşivi Yenile"),
             (OKUTOON, "OkuToon / Martial Peak"),
             (DIAG_REFRESH, "İndirmeleri Kontrol Et"),
@@ -396,6 +454,7 @@ mod win {
         }
         pos(WEB_BUTTON, margin, 166, bw, 39);
         pos(LOGS, margin + bw + 12, 166, bw, 39);
+        pos(GIT_PULL, margin + 2 * (bw + 12), 166, bw, 39);
         pos(URL, margin, 231, full, 32);
         pos(COPY, margin, 278, bw + 55, 39);
         pos(OPEN, margin + bw + 67, 278, bw, 39);
@@ -444,6 +503,17 @@ mod win {
                     RESTART => gui.launch(Action::Restart),
                     REFRESH => gui.launch(Action::Status),
                     LOGS => gui.launch(Action::Logs),
+                    GIT_PULL => {
+                        let answer = MessageBoxW(
+                            hwnd,
+                            wide("develop/burak-manga dalını sadece fast-forward ile güncelle.\\nYerel değişiklik varsa işlem duracak. Devam edilsin mi?").as_ptr(),
+                            wide("Git Pull onayı").as_ptr(),
+                            MB_YESNO | MB_ICONQUESTION,
+                        );
+                        if answer == IDYES {
+                            gui.launch(Action::GitPull);
+                        }
+                    },
                     WEB_BUTTON => if let Err(e) = browse(hwnd, WEB) { gui.log(&e); },
                     OPEN => if let Err(e) = browse(hwnd, CATALOG) { gui.log(&e); },
                     OKUTOON => if let Err(e) = browse(hwnd, OKUTOON_MARTIAL_PEAK) { gui.log(&e); },

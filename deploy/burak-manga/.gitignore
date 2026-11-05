@@ -6,3 +6,7 @@
 # Bagimli Oldugu Katman: Config
 .env
 storage/
+
+# Git Pull must ignore the locally extracted test launcher (never overwrite it).
+BurakMangaLauncher.exe
+BurakMangaLauncher-Windows-x64.zip
