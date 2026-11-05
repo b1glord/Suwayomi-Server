@@ -146,7 +146,7 @@ if ($Mode -eq 'Install') {
         throw 'SERVER_CONFIG_NOT_FOUND: WebUI ayarlarinda once Custom secin.'
     }
     $configText = Get-Content -LiteralPath $config -Raw -Encoding UTF8
-    if ($configText -notmatch '(?im)^\s*webUIFlavor\s*[:=]\s*["'']?Custom\b') {
+    if ($configText -notmatch '(?im)^\s*["'']?webUIFlavor["'']?\s*[:=]\s*["'']?Custom\b') {
         throw 'CUSTOM_WEBUI_NOT_SELECTED: WebUI ayarlarinda Flavor=Custom secip kaydedin.'
     }
     Assert-PlainDirectory $webui
