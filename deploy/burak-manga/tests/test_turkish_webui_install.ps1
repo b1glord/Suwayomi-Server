@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/tests/test_turkish_webui_install.ps1
 # Amac: Turkce WebUI ZIP kontrolunu Docker gerektirmeden test eder
 # Modul - PowerShell
-# Version: 0.1.0
+# Version: 0.2.0
 # Aciklama: Gecerli paket, bozuk hash ve zip traversal reddi
 # Bagimli Oldugu Katman: Testing
 
@@ -58,6 +58,48 @@ try {
     } catch {
         if ($_.Exception.Message -notmatch 'UNSAFE_ZIP_ENTRY') { throw }
     }
+
+    # Portable mock deployment: no real Docker/DB, only a disposable temp tree.
+    New-Package $false
+    $mockRoot = Join-Path $root 'test deployment'
+    $scriptDir = Join-Path $mockRoot 'scripts'
+    $mockData = Join-Path $mockRoot 'storage/Tachidesk'
+    $mockWebUI = Join-Path $mockData 'webUI'
+    $mockBackup = Join-Path $mockData 'webui-tr-backups/before-tr-20261105-000000'
+    New-Item -Path $scriptDir -ItemType Directory -Force | Out-Null
+    New-Item -Path $mockWebUI -ItemType Directory -Force | Out-Null
+    New-Item -Path $mockBackup -ItemType Directory -Force | Out-Null
+    Copy-Item -LiteralPath $script -Destination (Join-Path $scriptDir 'install-turkish-webui.ps1')
+    Set-Content -LiteralPath (Join-Path $mockRoot 'compose.yaml') -Value 'services: {}'
+    Set-Content -LiteralPath (Join-Path $mockData 'server.conf') -Value 'webUIFlavor = "Custom"'
+    Set-Content -LiteralPath (Join-Path $mockWebUI 'index.html') -Value 'original-interface'
+    Set-Content -LiteralPath (Join-Path $mockBackup 'index.html') -Value 'previous-original-interface'
+    $mockInstaller = Join-Path $scriptDir 'install-turkish-webui.ps1'
+
+    # Preflight never needs Docker and never changes WebUI.
+    & $mockInstaller -Mode PreflightInstall -ZipPath $zipPath
+    & $mockInstaller -Mode PreflightRestore
+    if ((Get-Content -LiteralPath (Join-Path $mockWebUI 'index.html') -Raw).Trim() -ne 'original-interface') {
+        throw 'PREFLIGHT_MODIFIED_WEBUI'
+    }
+
+    # Install + Restore paths are exercised with an inert Docker command.
+    function global:docker { $global:LASTEXITCODE = 0 }
+    try {
+        & $mockInstaller -Mode Install -ZipPath $zipPath
+        $written = (Get-Content -LiteralPath (Join-Path $mockWebUI 'index.html') -Raw).Trim()
+        if ($written -ne 'asset') { throw 'WEBUI_INSTALL_DID_NOT_REPLACE_INDEX' }
+        & $mockInstaller -Mode PreflightRestore
+        & $mockInstaller -Mode Restore
+        $restored = (Get-Content -LiteralPath (Join-Path $mockWebUI 'index.html') -Raw).Trim()
+        if ($restored -ne 'original-interface') { throw 'WEBUI_RESTORE_DID_NOT_RECOVER_ORIGINAL' }
+        if (-not (Test-Path -LiteralPath (Join-Path $mockData 'webui-tr-backups'))) {
+            throw 'WEBUI_BACKUP_DIRECTORY_REMOVED'
+        }
+    } finally {
+        Remove-Item -Path Function:\docker -ErrorAction SilentlyContinue
+    }
+
     Write-Host 'Turkish WebUI offline checks passed.'
 } finally {
     Remove-Item -LiteralPath $root -Force -Recurse
