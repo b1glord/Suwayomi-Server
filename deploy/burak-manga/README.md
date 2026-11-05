@@ -2,11 +2,11 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.5.1
+Version: 0.6.0
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
-# Burak Manga Archive - local integration v0.5.1
+# Burak Manga Archive - local integration v0.6.0
 
 This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
@@ -78,6 +78,16 @@ container testing. Use sources responsibly and respect the sites' terms and cont
 
 For the architecture decision, see docs/decisions/0001-suwayomi.md in
 this directory.
+
+## Telefon erisimi (Rust Launcher v0.9.0)
+
+Varsayilan Docker portu sadece localhost'a baglidir.
+Telefon baglantisi icin Launcher > Telefon Erisimi Ac/Kapat
+butonlarini kullanin. Auth (UI Login + kullanici adi + parola)
+etkin olmalidir. server.ip ayarini Windows LAN IP'si yapmayin;
+0.0.0.0 olarak birakin. Launcher secilen IP'yi, host sahipligini,
+auth ayarlarini, ek Compose dosyasini dogrular ve onayla
+yalniz suwayomi servisini yeniler. Ayrintilar: LAUNCHER.md.
 
 ## Windows GUI launcher (Rust)
 

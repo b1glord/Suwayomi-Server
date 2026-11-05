@@ -2,12 +2,12 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.8.0
+Version: 0.9.0
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Burak Manga Launcher v0.8.0 (Rust)
+# Burak Manga Launcher v0.9.0 (Rust)
 
 Windows 10/11 x64 icin yerel Win32 arayuzu. WPF, WebView ve Rust SDK
 kurulumu gerektirmez. Turkce WebUI kurulum islemleri icin Windows ile
@@ -36,6 +36,9 @@ konuldugunda compose.yaml bulunmadigi icin gorunur hata mesaji verir.
 - Durum ve gunluk: Container durumunu ve son 100 gunluk satirini gosterir.
 - Git Pull: Secili fork'un develop/burak-manga dalini yalnizca fast-forward ile gunceller; once onay alir.
 - WebUI: Yerel http://127.0.0.1:4567 adresini acar.
+- Telefon Erisimi Ac: Windows ozel ag IPv4 adresini dogrular,
+  auth etkinse ek LAN portunu acip yalniz suwayomi servisini yeniler.
+- Telefon Erisimi Kapat: Yedek alarak LAN portunu kapatir.
 - Turkce Paketi Al: En son basarili Turkce WebUI test paketini bulmak icin GitHub Actions sayfasini acar.
 - Turkce WebUI Kur: Paket ZIP'ini Windows dosya secicisinden alir, hash/on kosul dogrular; yedekli kurar.
 - Turkceyi Geri Al: En son orijinal WebUI yedegini geri yukler. Her iki islem de onay gerektirir.
@@ -200,3 +203,51 @@ durumunu kontrol edin. Queue/DB/CBZ otomatik silinmez.
 Gercek Windows Docker WebUI geri alma islemi kullanici ortaminda
 ayrica test edilmelidir; CI birim/portable layout testleri bu testi
 kapsamaz.
+
+## Telefon baglantisi (v0.9.0)
+
+**Varsayilan KAPALI.** Suwayomi'nin server.ip ayari 0.0.0.0
+kalir; Windows LAN IP'sini server.ip alanina yazmayin.
+Orijinal Compose localhost binding'i korunur.
+
+1. Suwayomi > Settings > Authentication icinde UI Login (veya diger
+   desteklenen auth kiplerinden biri) acin; kullanici adi ve parola
+   belirleyin. Giris korumasi olmadan LAN erisimi acilmaz.
+2. Windows PowerShell'de ipconfig ile aktif Wi-Fi/Ethernet IPv4
+   adresini ogrenin.
+3. Launcher > Telefon IP kutusuna adresi girip Telefon Erisimi Ac
+   butonuna basin; uyariyi onaylayin.
+4. Launcher IP'nin RFC1918 ozel adres oldugunu ve Windows hostuna
+   atandigini kontrol eder, compose.yaml dosyasini degistirmez.
+   Git'in yok saydigi compose.lan.yaml olusur. Docker Compose
+   dogrulamasindan sonra sadece suwayomi servisi yeniden olusturulur.
+5. Telefon ayni Wi-Fi agindayken http://WINDOWS-IP:4567 adresini acin.
+   Bilgisayarda http://127.0.0.1:4567 kullanilmaya devam eder.
+6. Windows Defender Firewall engellerse ancak gerekli oldugunda
+   Private network ve LocalSubnet ile sinirli TCP 4567 kuralini
+   elle olusturun; yonetici izni gerekebilir. Modem port yonlendirmesi
+   yapmayin.
+
+**Telefon Erisimi Kapat** LAN ek portunu kaldirir; onceki
+LAN Compose dosyasi veri klasorunde yedeklenir. Silinmez.
+Kurulum veya geri alma Docker'da basarisizsa onceki duruma
+donulmeye calisilir. Yabanci/degistirilmis ek Compose dosyasi
+algilanirsa islem reddedilir.
+
+**Guvenlik:** HTTP sifreli degildir; parola ve oturum belirtecleri
+agda gorunebilir. Guvenilmeyen Wi-Fi'de kullanmayin.
+Internet/mobil veri erisimi icin VPN ve TLS ayri gerekir.
+Launcher kendiliginden Windows Firewall, modem veya auth
+ayarlari degistirmez.
+
+**Onemli:** Yeniden olusturma sonrasinda Suwayomi indirme kuyrugu
+otomatik devam edebilir. Mevcut manga dosyalari, veritabani ve
+diger 3 servis degistirilmez. Launcher tum Compose komutlarina
+yonetilen ek dosyayi dahil eder; elle docker compose -f compose.yaml
+komutu kullanilirsa LAN portu kaybolabilir. Manuel durumda ek
+-f compose.lan.yaml parametresini de belirtin.
+
+**Test siniri:** PowerShell mock-Docker testleri, Rust arguman
+ve duz metin override testleri, Compose static merge kontrolu CI'da
+calistirilir. Gercek telefon/Windows Firewall ve canli Docker
+baglantisi kullanici makinesinde ayrica dogrulanmalidir.
