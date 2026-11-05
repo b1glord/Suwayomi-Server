@@ -91,7 +91,7 @@ fn compose_file(exe: &Path) -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 mod win {
-    use super::{archive, diagnostics, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
+    use super::{archive, diagnostics, official_flaresolverr_selected, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
     use std::collections::HashMap;
     use std::ffi::{OsStr, OsString};
     use std::mem;

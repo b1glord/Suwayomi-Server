@@ -147,6 +147,9 @@ From the deployment directory in PowerShell:
 ```powershell
 Set-Location E:\Docker\Suwayomi-Server\deploy\burak-manga
 # If .env already exists, inspect it and merge settings; never overwrite it.
+if (Test-Path -LiteralPath .\.env) {
+    throw 'Existing .env detected; merge settings manually before switching.'
+}
 Copy-Item .\config\official-flaresolverr.env.example .\.env
 docker compose -f compose.yaml config --quiet
 docker compose -f compose.yaml pull flaresolverr-official
