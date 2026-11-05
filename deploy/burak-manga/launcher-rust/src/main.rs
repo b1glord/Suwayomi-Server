@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.8.0
+// Version: 0.9.0
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -13,17 +13,18 @@ mod archive;
 mod diagnostics;
 mod git_update;
 mod webui_install;
+mod lan_access;
 
 const CATALOG: &str = "https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb";
 const WEB: &str = "http://127.0.0.1:4567";
 const OKUTOON_MARTIAL_PEAK: &str = "https://okutoon.com/martial-peak";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads, GitPull, TurkishInstall, TurkishRestore }
+enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads, GitPull, TurkishInstall, TurkishRestore, LanEnable, LanDisable }
 
 impl Action {
     fn args(self, file: &Path) -> Vec<OsString> {
-        let mut args = vec![OsString::from("compose"), OsString::from("-f"), file.as_os_str().to_owned()];
+        let mut args = lan_access::compose_args(file);
         let suffix: &[&str] = match self {
             // Docker Compose starts both helpers via cf-router dependencies.
             Self::Start => &["up", "-d", "suwayomi"],
@@ -31,7 +32,7 @@ impl Action {
             Self::Restart => &["restart", "flaresolverr", "flaresolverr-official", "cf-router", "suwayomi"],
             Self::Status => &["ps", "--status", "running", "--services"],
             Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi", "cf-router", "flaresolverr", "flaresolverr-official"],
-            Self::Archive | Self::Diagnostics | Self::PauseDownloads | Self::GitPull | Self::TurkishInstall | Self::TurkishRestore => &[],
+            Self::Archive | Self::Diagnostics | Self::PauseDownloads | Self::GitPull | Self::TurkishInstall | Self::TurkishRestore | Self::LanEnable | Self::LanDisable => &[],
         };
         args.extend(suffix.iter().map(OsString::from));
         args
@@ -49,6 +50,8 @@ impl Action {
             Self::GitPull => "Git Pull",
             Self::TurkishInstall => "Türkçe WebUI kurulumu",
             Self::TurkishRestore => "Türkçe WebUI geri alma",
+            Self::LanEnable => "Telefon erişimini açma",
+            Self::LanDisable => "Telefon erişimini kapatma",
         }
     }
 }
@@ -68,7 +71,7 @@ fn compose_file(exe: &Path) -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 mod win {
-    use super::{archive, diagnostics, git_update, webui_install, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
+    use super::{archive, diagnostics, git_update, lan_access, webui_install, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
     use std::collections::HashMap;
     use std::ffi::{OsStr, OsString};
     use std::mem;
@@ -114,6 +117,10 @@ mod win {
     const TURKISH_PACKAGE: usize = 127;
     const TURKISH_INSTALL: usize = 128;
     const TURKISH_RESTORE: usize = 129;
+    const LAN_LABEL: usize = 130;
+    const LAN_INPUT: usize = 131;
+    const LAN_ENABLE: usize = 132;
+    const LAN_DISABLE: usize = 133;
     const DIAG_POLL_INTERVAL: Duration = Duration::from_secs(60);
     const TIMER_ID: usize = 5;
     const GUI_SMOKE_TIMER: usize = 6;
@@ -150,6 +157,7 @@ mod win {
         busy: bool,
         guard_enabled: bool,
         selected_turkish_zip: Option<PathBuf>,
+        selected_lan_ip: Option<String>,
         auto_pause_issued: bool,
         last_diagnostics: Instant,
     }
@@ -157,7 +165,7 @@ mod win {
         fn new(compose: PathBuf) -> Self {
             let (sender, receiver) = mpsc::channel();
             Self { compose, controls: HashMap::new(), sender, receiver, busy: false,
-                guard_enabled: false, selected_turkish_zip: None, auto_pause_issued: false,
+                guard_enabled: false, selected_turkish_zip: None, selected_lan_ip: None, auto_pause_issued: false,
                 last_diagnostics: Instant::now() }
         }
         fn control(&self, id: usize) -> HWND { self.controls.get(&id).copied().unwrap_or(ptr::null_mut()) }
@@ -172,11 +180,14 @@ mod win {
             self.label(&format!("{} islemi devam ediyor...", action.title()));
             let path = self.compose.clone();
             let zip = self.selected_turkish_zip.clone();
+            let ip = self.selected_lan_ip.clone();
             let tx = self.sender.clone();
             thread::spawn(move || {
                 let raw = match action {
                     Action::TurkishInstall => webui_manage(webui_install::Operation::Install, &path, zip.as_deref()),
                     Action::TurkishRestore => webui_manage(webui_install::Operation::Restore, &path, None),
+                    Action::LanEnable => lan_manage(lan_access::Mode::Enable, &path, ip.as_deref()),
+                    Action::LanDisable => lan_manage(lan_access::Mode::Disable, &path, None),
                     _ => perform(action, &path),
                 };
                 let health = if action == Action::Diagnostics {
@@ -345,6 +356,16 @@ mod win {
             ),
             updated
         ))
+    }
+
+    // BM-LAN-009: IP is passed as an argv element, never interpolated into a shell.
+    // PowerShell validates private IPv4, local NIC ownership, authentication,
+    // Compose overlay content, and restores localhost on a recreate failure.
+    fn lan_manage(mode: lan_access::Mode, compose: &Path, ip: Option<&str>) -> Result<String, String> {
+        let script = lan_access::script_path(compose)?;
+        let arguments = lan_access::script_arguments(mode, &script, ip)?;
+        let root = compose.parent().ok_or("COMPOSE_PARENT_MISSING")?;
+        run_process("powershell.exe", &arguments, root, Duration::from_secs(180))
     }
 
     // BM-WEBUI-008: Preflight before stopping containers; restart only if previously running.
@@ -517,6 +538,7 @@ mod win {
             (START, "Başlat"), (STOP, "Durdur"), (RESTART, "Yeniden Başlat"), (REFRESH, "Durumu Yenile"),
             (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (GIT_PULL, "Git Pull"), (TURKISH_PACKAGE, "Türkçe Paketi Al"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç"),
             (TURKISH_INSTALL, "Türkçe WebUI Kur"), (TURKISH_RESTORE, "Türkçeyi Geri Al"),
+            (LAN_ENABLE, "Telefon Erişimi Aç"), (LAN_DISABLE, "Telefon Erişimi Kapat"),
             (ARCHIVE_OPEN, "Arşiv Klasörünü Aç"), (ARCHIVE_REFRESH, "Arşivi Yenile"),
             (OKUTOON, "OkuToon / Martial Peak"),
             (DIAG_REFRESH, "İndirmeleri Kontrol Et"),
@@ -524,6 +546,8 @@ mod win {
             (PAUSE_DOWNLOADS, "İndirmeleri Duraklat")
         ] { make(hwnd, state, id, "BUTTON", caption, WS_TABSTOP, 0); }
         make(hwnd, state, URL, "EDIT", CATALOG, ES_READONLY, WS_EX_CLIENTEDGE);
+        make(hwnd, state, LAN_LABEL, "STATIC", "Telefon IP (ipconfig):", 0, 0);
+        make(hwnd, state, LAN_INPUT, "EDIT", "", WS_TABSTOP, WS_EX_CLIENTEDGE);
         make(hwnd, state, ARCHIVE_LABEL, "STATIC", "Arşiv taranıyor...", 0, 0);
         make(hwnd, state, DIAG_LABEL, "STATIC", "İndirme kontrolü başlatılacak...", 0, 0);
         make(hwnd, state, LOG, "EDIT", "İşlem günlükleri burada görünecek.",
@@ -533,7 +557,7 @@ mod win {
         let mut area: windows_sys::Win32::Foundation::RECT = mem::zeroed();
         GetClientRect(hwnd, &mut area);
         let width = (area.right - area.left).max(820);
-        let height = (area.bottom - area.top).max(650);
+        let height = (area.bottom - area.top).max(735);
         let margin = 25;
         let full = width - 2 * margin;
         let bw = (full - 36) / 4;
@@ -563,7 +587,11 @@ mod win {
         pos(DIAG_REFRESH, margin, 455, bw + 70, 39);
         pos(GUARD_TOGGLE, margin + bw + 82, 455, bw + 35, 39);
         pos(PAUSE_DOWNLOADS, margin + 2 * bw + 128, 455, bw + 28, 39);
-        pos(LOG, margin, 507, full, (height - 535).max(100));
+        pos(LAN_LABEL, margin, 520, bw, 32);
+        pos(LAN_INPUT, margin + bw + 12, 513, bw, 37);
+        pos(LAN_ENABLE, margin + 2 * (bw + 12), 513, bw, 39);
+        pos(LAN_DISABLE, margin + 3 * (bw + 12), 513, bw, 39);
+        pos(LOG, margin, 566, full, (height - 590).max(100));
     }
     fn browse_folder(hwnd: HWND, compose: &Path) -> Result<(), String> {
         let root = archive::downloads_path(compose)?;
@@ -587,6 +615,14 @@ mod win {
                 ptr::null(), ptr::null(), SW_SHOWNORMAL)
         };
         if (value as isize) <= 32 { Err("Tarayici acilamadi".into()) } else { Ok(()) }
+    }
+
+    fn read_input(handle: HWND) -> String {
+        if handle.is_null() { return String::new(); }
+        let length = unsafe { GetWindowTextLengthW(handle) };
+        let mut chars = vec![0u16; (length as usize).min(128) + 1];
+        let read = unsafe { GetWindowTextW(handle, chars.as_mut_ptr(), chars.len() as i32) };
+        String::from_utf16_lossy(&chars[..read as usize])
     }
 
     fn select_turkish_zip(hwnd: HWND) -> Result<Option<PathBuf>, String> {
@@ -636,6 +672,32 @@ mod win {
                         );
                         if answer == IDYES {
                             gui.launch(Action::GitPull);
+                        }
+                    },
+                    LAN_ENABLE => {
+                        if !gui.busy {
+                            let ip = read_input(gui.control(LAN_INPUT));
+                            let answer = MessageBoxW(
+                                hwnd,
+                                wide("Suwayomi yalnızca seçtiğiniz özel ağ IP adresinde telefona açılacak.\nÖNCE Suwayomi'de Authentication / UI Login etkin ve parola ayarlı olmalı.\n\nBu işlem yalnızca Suwayomi konteynerini yeniden oluşturur. Açılışta indirme kuyruğu devam edebilir.\n\nAynı Wi-Fi ağındaki cihazlar erişebilir; HTTP şifreli değildir.\nOnaylıyor musunuz?").as_ptr(),
+                                wide("Telefon erişimi güvenlik onayı").as_ptr(),
+                                MB_YESNO | MB_ICONQUESTION,
+                            );
+                            if answer == IDYES {
+                                gui.selected_lan_ip = Some(ip);
+                                gui.launch(Action::LanEnable);
+                            }
+                        }
+                    },
+                    LAN_DISABLE => {
+                        if !gui.busy {
+                            let answer = MessageBoxW(
+                                hwnd,
+                                wide("Telefon erişimi kapatılacak. Yalnızca localhost kalacak.\nSuwayomi yeniden oluşturulacak; diğer servisler etkilenmez.\nDevam edilsin mi?").as_ptr(),
+                                wide("Telefon erişimini kapat").as_ptr(),
+                                MB_YESNO | MB_ICONQUESTION,
+                            );
+                            if answer == IDYES { gui.launch(Action::LanDisable); }
                         }
                     },
                     TURKISH_PACKAGE => {
@@ -730,7 +792,7 @@ mod win {
             let hwnd = CreateWindowExW(
                 0, name.as_ptr(), wide(&format!("Burak Manga Launcher v{}", env!("CARGO_PKG_VERSION"))).as_ptr(),
                 WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT,
-                950, 770, ptr::null_mut(), ptr::null_mut(), instance, ptr::null(),
+                950, 855, ptr::null_mut(), ptr::null_mut(), instance, ptr::null(),
             );
             if hwnd.is_null() { return Err(format!("CREATE_WINDOW_FAILED: {}", std::io::Error::last_os_error())); }
             let ptr = Box::into_raw(Box::new(App::new(compose)));
