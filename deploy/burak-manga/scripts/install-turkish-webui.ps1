@@ -1,13 +1,13 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/scripts/install-turkish-webui.ps1
 # Amac: Turkce WebUI test paketini yedekli ve geri alinabilir bicimde kurar
 # Modul - PowerShell
-# Version: 0.1.0
+# Version: 0.2.0
 # Aciklama: Sadece webUI klasorunu degistirir; storage/DB ve Docker servislerini degistirmez
 # Bagimli Oldugu Katman: Tool
 
 [CmdletBinding()]
 param(
-    [ValidateSet('Check', 'Install', 'Restore')]
+    [ValidateSet('Check', 'PreflightInstall', 'PreflightRestore', 'Install', 'Restore')]
     [string]$Mode = 'Check',
     [string]$ZipPath
 )
@@ -123,7 +123,7 @@ $data = Join-Path $deployment 'storage/Tachidesk'
 $webui = Join-Path $data 'webUI'
 $backups = Join-Path $data 'webui-tr-backups'
 
-if ($Mode -eq 'Check' -or $Mode -eq 'Install') {
+if ($Mode -in @('Check', 'PreflightInstall', 'Install')) {
     if ([string]::IsNullOrWhiteSpace($ZipPath)) {
         throw 'PREVIEW_ZIP_PATH_REQUIRED'
     }
@@ -138,6 +138,40 @@ if (-not (Test-Path -LiteralPath $compose -PathType Leaf)) {
     throw 'COMPOSE_MISSING'
 }
 Assert-PlainDirectory $data
+
+# Preflight is read-only; the Rust launcher calls this before stopping Suwayomi.
+if ($Mode -eq 'PreflightInstall') {
+    $config = Join-Path $data 'server.conf'
+    if (-not (Test-Path -LiteralPath $config -PathType Leaf)) {
+        throw 'SERVER_CONFIG_NOT_FOUND: Settings > WebUI > Flavor = Custom'
+    }
+    $configText = Get-Content -LiteralPath $config -Raw -Encoding UTF8
+    if ($configText -notmatch '(?im)^\s*["'']?webUIFlavor["'']?\s*[:=]\s*["'']?Custom\b') {
+        throw 'CUSTOM_WEBUI_NOT_SELECTED: Settings > WebUI > Flavor = Custom'
+    }
+    Assert-PlainDirectory $webui
+    if (-not (Test-Path -LiteralPath (Join-Path $webui 'index.html') -PathType Leaf)) {
+        throw 'INSTALLED_WEBUI_INVALID'
+    }
+    Write-Host 'Turkce WebUI kurulum on kontrolu basarili. Dosyalar degismedi.'
+    return
+}
+
+if ($Mode -eq 'PreflightRestore') {
+    Assert-PlainDirectory $backups
+    $available = @(Get-ChildItem -LiteralPath $backups -Directory |
+        Where-Object { $_.Name -like 'before-tr-*' })
+    if ($available.Count -eq 0) { throw 'NO_WEBUI_BACKUP' }
+    $latest = $available | Sort-Object Name -Descending | Select-Object -First 1
+    Assert-PlainDirectory $latest.FullName
+    if (-not (Test-Path -LiteralPath (Join-Path $latest.FullName 'index.html') -PathType Leaf)) {
+        throw 'WEBUI_BACKUP_INVALID'
+    }
+    if (Test-Path -LiteralPath $webui) { Assert-PlainDirectory $webui }
+    Write-Host 'WebUI geri alma on kontrolu basarili. Dosyalar degismedi.'
+    return
+}
+
 Assert-StoppedSuwayomi $compose
 
 if ($Mode -eq 'Install') {
