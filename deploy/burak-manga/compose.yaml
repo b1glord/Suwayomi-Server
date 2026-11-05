@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/compose.yaml
 # Amac: Yerel Suwayomi ve Cloudflare yardimcisini Docker aginda calistirir
 # Modul - YAML
-# Version: 0.2.0
+# Version: 0.3.0
 # Aciklama: Resmi stable sunucu, dahili Byparr yardimcisi ve kalici host verisi
 # Bagimli Oldugu Katman: Infrastructure
 services:
@@ -12,7 +12,7 @@ services:
       TZ: Europe/Istanbul
       DOWNLOAD_AS_CBZ: "true"
       FLARESOLVERR_ENABLED: "true"
-      FLARESOLVERR_URL: "http://flaresolverr:8191"
+      FLARESOLVERR_URL: "${MANGA_CF_HELPER_URL:-http://flaresolverr:8191}"
       FLARESOLVERR_TIMEOUT: "60"
     depends_on:
       - flaresolverr
@@ -37,6 +37,27 @@ services:
     shm_size: "512mb"
     # Deliberately no "ports": the service is reachable only inside the
     # Docker Compose network, at http://flaresolverr:8191.
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  flaresolverr-official:
+    # Optional official engine. Enable using COMPOSE_PROFILES=official-flaresolverr.
+    profiles:
+      - official-flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    environment:
+      TZ: Europe/Istanbul
+      LOG_LEVEL: info
+    shm_size: "512mb"
+    tmpfs:
+      - /tmp:size=256M,mode=1777
+    # Intentionally no published host ports; use Docker DNS on port 8191.
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true

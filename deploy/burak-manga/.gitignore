@@ -1,13 +1,8 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/.gitignore
-# Amac: Local arsivi ve yerel gizli/uretilmis dosyalari depodan dislar
+# Amac: Yerel Compose helper secimi ve manga verilerini Git disinda tutar
 # Modul - GitIgnore
-# Version: 0.1.0
-# Aciklama: Veri dosyalari ve Python cache icin kapsamli istisnalar
-# Bagimli Oldugu Katman: Infrastructure
-storage/
+# Version: 0.3.0
+# Aciklama: Devreye alma ayarlari ve kalici dosyalar
+# Bagimli Oldugu Katman: Config
 .env
-__pycache__/
-.pytest_cache/
-*.pyc
-*.cbz
-*.log
+storage/

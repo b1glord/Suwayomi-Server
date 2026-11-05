@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.2.0
+Version: 0.3.0
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
@@ -129,3 +129,47 @@ remain running until stopped with `docker compose stop flaresolverr`.
 
 The upstream documentation is here:
 https://github.com/Suwayomi/Suwayomi-Server/blob/master/docs/Configuring-Suwayomi%E2%80%90Server.md
+
+## Optional official FlareSolverr v3.5.2
+
+The existing Byparr v3.0.4 remains the DEFAULT helper.
+Official FlareSolverr is a second, **opt-in** Docker service with profile
+`official-flaresolverr`. The Suwayomi server uses only one helper URL
+at a time: it does not automatically fall back between engines.
+In official mode Byparr may remain running as the base dependency, but
+the selected endpoint is the official service. Neither service publishes
+port 8191 on the host.
+
+### Select official FlareSolverr
+
+From the deployment directory in PowerShell:
+
+```powershell
+Set-Location E:\Docker\Suwayomi-Server\deploy\burak-manga
+# If .env already exists, inspect it and merge settings; never overwrite it.
+Copy-Item .\config\official-flaresolverr.env.example .\.env
+docker compose -f compose.yaml config --quiet
+docker compose -f compose.yaml pull flaresolverr-official
+docker compose -f compose.yaml up -d
+docker compose -f compose.yaml ps
+docker compose -f compose.yaml logs --tail 80 flaresolverr-official
+```
+
+The `.env` file is local and ignored by Git. The Rust Launcher executes
+Compose from this same directory. The server's environment URL is now
+configurable with `MANGA_CF_HELPER_URL`, defaulting to Byparr.
+
+### Switch back to Byparr
+
+If the `.env` file was created only for this setting (and contains no
+other overrides), from the deployment directory:
+
+```powershell
+Rename-Item .\.env .\.env.flaresolverr.disabled
+docker compose -f compose.yaml up -d
+docker compose --profile official-flaresolverr -f compose.yaml stop flaresolverr-official
+```
+
+Keep your downloaded manga and queue: do not use `down -v` or delete
+`storage/Tachidesk`. Test a single chapter before retrying large queues.
+FlareSolverr might not solve every challenge. It has extra browser RAM use.
