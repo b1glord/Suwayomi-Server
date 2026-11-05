@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/.gitignore
 # Amac: Yerel Compose helper secimi ve manga verilerini Git disinda tutar
 # Modul - GitIgnore
-# Version: 0.3.0
+# Version: 0.9.0
 # Aciklama: Devreye alma ayarlari ve kalici dosyalar
 # Bagimli Oldugu Katman: Config
 .env
@@ -10,3 +10,6 @@ storage/
 # Git Pull must ignore the locally extracted test launcher (never overwrite it).
 BurakMangaLauncher.exe
 BurakMangaLauncher-Windows-x64.zip
+
+# Personal machine LAN binding is not committed.
+compose.lan.yaml
