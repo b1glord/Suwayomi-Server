@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/deploy/burak-manga/compose.yaml
-# Amac: Yerel Suwayomi ve Cloudflare yardimcisini Docker aginda calistirir
+# Amac: Tek Docker Compose icinde Byparr -> FlareSolverr otomatik yedekleme
 # Modul - YAML
-# Version: 0.3.0
-# Aciklama: Resmi stable sunucu, dahili Byparr yardimcisi ve kalici host verisi
+# Version: 0.4.0
+# Aciklama: Suwayomi sadece cf-router URL'sini kullanir; veri volume'u korunur
 # Bagimli Oldugu Katman: Infrastructure
 services:
   suwayomi:
@@ -12,10 +12,11 @@ services:
       TZ: Europe/Istanbul
       DOWNLOAD_AS_CBZ: "true"
       FLARESOLVERR_ENABLED: "true"
-      FLARESOLVERR_URL: "${MANGA_CF_HELPER_URL:-http://flaresolverr:8191}"
-      FLARESOLVERR_TIMEOUT: "60"
+      FLARESOLVERR_URL: "http://cf-router:8191"
+      # Two backends can each take up to 60s.
+      FLARESOLVERR_TIMEOUT: "150"
     depends_on:
-      - flaresolverr
+      - cf-router
     ports:
       - "127.0.0.1:4567:4567"
     volumes:
@@ -29,14 +30,36 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  cf-router:
+    image: python:3.13-alpine
+    init: true
+    command: ["python", "-B", "/app/router.py"]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CF_PRIMARY: "http://flaresolverr:8191"
+      CF_SECONDARY: "http://flaresolverr-official:8191"
+    volumes:
+      - ./cloudflare-router/router.py:/app/router.py:ro
+    depends_on:
+      - flaresolverr
+      - flaresolverr-official
+    read_only: true
+    # Only internal Docker DNS; no published host API port.
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   flaresolverr:
-    # Upstream Suwayomi uses the FlareSolverr-compatible Byparr API.
+    # First attempt: Byparr compatible API.
     image: ghcr.io/thephaseless/byparr:v3.0.4
     environment:
       TZ: Europe/Istanbul
     shm_size: "512mb"
-    # Deliberately no "ports": the service is reachable only inside the
-    # Docker Compose network, at http://flaresolverr:8191.
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
@@ -47,9 +70,7 @@ services:
         max-file: "3"
 
   flaresolverr-official:
-    # Optional official engine. Enable using COMPOSE_PROFILES=official-flaresolverr.
-    profiles:
-      - official-flaresolverr
+    # Automatic fallback: official FlareSolverr.
     image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
     environment:
       TZ: Europe/Istanbul
@@ -57,7 +78,6 @@ services:
     shm_size: "512mb"
     tmpfs:
       - /tmp:size=256M,mode=1777
-    # Intentionally no published host ports; use Docker DNS on port 8191.
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
