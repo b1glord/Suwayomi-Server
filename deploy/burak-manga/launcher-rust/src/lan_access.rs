@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/lan_access.rs
 // Amac: Telefon erisimine ait guvenilir script ve Compose ek dosya yollarini cozer
 // Modul - Rust
-// Version: 0.9.0
+// Version: 0.9.1
 // Aciklama: Sabit argumanlar, shell injection yok, local override sadece yonetilen format
 // Bagimli Oldugu Katman: Service / Tool
 
@@ -10,14 +10,12 @@ use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode {
-    Status,
     Enable,
     Disable,
 }
 impl Mode {
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Status => "Status",
             Self::Enable => "Enable",
             Self::Disable => "Disable",
         }

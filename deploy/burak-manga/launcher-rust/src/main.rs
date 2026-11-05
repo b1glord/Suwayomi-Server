@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.9.0
+// Version: 0.9.1
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -408,16 +408,12 @@ mod win {
 
         let apply = webui_script(operation.apply(), compose, zip);
         let restart = if was_running {
-            docker(
-                &[
-                    OsString::from("compose"), OsString::from("-f"),
-                    compose.as_os_str().to_owned(), OsString::from("up"),
-                    OsString::from("-d"), OsString::from("--no-deps"),
-                    OsString::from("suwayomi"),
-                ],
-                compose,
-                Duration::from_secs(120),
-            )
+            let mut command = lan_access::compose_args(compose);
+            command.extend([
+                OsString::from("up"), OsString::from("-d"), OsString::from("--no-deps"),
+                OsString::from("suwayomi"),
+            ]);
+            docker(&command, compose, Duration::from_secs(120))
         } else {
             Ok("Suwayomi daha once kapaliydi; kapali birakildi.".into())
         };
