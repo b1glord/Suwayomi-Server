@@ -1,0 +1,84 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/suwayomi_webui_tr_preview.yml
+# Amac: Pinli Suwayomi-WebUI Turkce onizleme ZIP test artifacti
+# Modul - YAML
+# Version: 0.1.0
+# Aciklama: Ana manga kurulumundan ayri; production release uretmez
+# Bagimli Oldugu Katman: Testing
+name: Suwayomi - Turkish WebUI preview
+on:
+  push:
+    branches:
+      - feat/suwayomi-webui-tr-preview
+    paths:
+      - 'tools/webui-tr-preview/**'
+      - '.github/workflows/suwayomi_webui_tr_preview.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  turkish-webui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout preview tooling
+        uses: actions/checkout@v4
+      - name: Checkout upstream WebUI at verified commit
+        uses: actions/checkout@v4
+        with:
+          repository: Suwayomi/Suwayomi-WebUI
+          ref: 020a274e8a35a45195f69210ccac2f3e18502749
+          path: webui
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.20.0'
+      - name: Test translation opt-in logic
+        run: node --test tools/webui-tr-preview/enable-turkish.test.mjs
+      - name: Enable Turkish in preview
+        run: node tools/webui-tr-preview/enable-turkish.mjs webui
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11.1.2'
+          run_install: false
+      - name: Install dependencies
+        working-directory: webui
+        run: pnpm install --frozen-lockfile
+      - name: Prepare build environment
+        working-directory: webui
+        run: pnpm setup-env-files
+      - name: Build translated WebUI
+        working-directory: webui
+        run: pnpm exec vite build
+      - name: Verify and package test ZIP
+        run: |
+          set -euo pipefail
+          test -s webui/build/index.html
+          mkdir -p output
+          python3 - <<'PY'
+          import hashlib
+          import pathlib
+          import zipfile
+          root = pathlib.Path('webui/build')
+          files = sorted(p for p in root.rglob('*') if p.is_file())
+          assert len(files) >= 10, 'WebUI incomplete'
+          output = pathlib.Path('output/Suwayomi-WebUI-TR-preview.zip')
+          with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as zipf:
+              for file in files:
+                  zipf.write(file, arcname=file.relative_to(root).as_posix())
+          with zipfile.ZipFile(output) as zipf:
+              assert 'index.html' in zipf.namelist()
+              assert len(zipf.namelist()) == len(files)
+              assert zipf.testzip() is None
+          digest = hashlib.sha256(output.read_bytes()).hexdigest()
+          pathlib.Path('output/SHA256SUMS.txt').write_text(
+              digest + '  ' + output.name + '\n', encoding='utf-8')
+          print('Files:', len(files), 'SHA256:', digest)
+          PY
+      - name: Upload preview artifact (not release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: suwayomi-webui-tr-preview
+          path: output/
+          retention-days: 7
