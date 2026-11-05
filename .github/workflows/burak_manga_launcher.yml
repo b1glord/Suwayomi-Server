@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_launcher.yml
 # Amac: Native Rust Windows baslaticisini derler ve test ZIP artifacti uretir
 # Modul - YAML
-# Version: 0.4.0
+# Version: 0.9.0
 # Aciklama: Windows x64 build, test, Clippy, checksum ve paket kontrolu
 # Bagimli Oldugu Katman: Testing
 name: Burak Manga - Rust launcher
@@ -42,6 +42,9 @@ jobs:
       - name: Turkish WebUI installer tests (mock Docker only)
         shell: pwsh
         run: ../tests/test_turkish_webui_install.ps1
+      - name: LAN helper mock tests
+        shell: pwsh
+        run: ../tests/test_lan_access.ps1
       - name: Release build
         run: cargo build --release
       - name: Portable layout smoke and ZIP integrity

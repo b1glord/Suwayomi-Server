@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_validate.yml
 # Amac: Manga arsivi dosyalarini yalnizca PR esnasinda dogrular
 # Modul - YAML
-# Version: 0.3.0
+# Version: 0.9.0
 # Aciklama: Unit test, kaynak kaydi ve Compose statik kontrolu; release yok
 # Bagimli Oldugu Katman: Testing
 name: Burak Manga - validate
@@ -30,6 +30,9 @@ jobs:
       - name: Turkish WebUI package checks (offline)
         shell: pwsh
         run: ./deploy/burak-manga/tests/test_turkish_webui_install.ps1
+      - name: LAN access helper mock tests
+        shell: pwsh
+        run: ./deploy/burak-manga/tests/test_lan_access.ps1
       - name: Compose static config
         run: docker compose -f deploy/burak-manga/compose.yaml config --quiet
       - name: Verify referenced public container image manifests
