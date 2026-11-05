@@ -2,11 +2,11 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/README.md
 Amac: Yerel manga arsivini kurma ve test etme kilavuzu
 Modul - Markdown
-Version: 0.4.2
+Version: 0.5.0
 Aciklama: Docker Compose, CBZ import, kaynak listesi ve sinirlar
 Bagimli Oldugu Katman: Documentation
 -->
-# Burak Manga Archive - local integration v0.4.2
+# Burak Manga Archive - local integration v0.5.0
 
 This is a standalone local integration within the Suwayomi-Server fork.
 Its Compose service uses the official upstream stable image; code changes
@@ -182,3 +182,50 @@ compose.yaml from version control, leaving storage/Tachidesk unchanged,
 then execute docker compose up -d. Do not reset uncommitted files or
 delete existing manga. For a quick diagnostic without any download
 retries, use docker compose ps and docker compose logs.
+
+## Turkce WebUI test kurulumu (geri alinabilir)
+
+Suwayomi-WebUI upstream'in Turkce katalogu su anda normal dil listesinde
+yer almiyor. Ayrica hazirlanmis Turkce preview paketinde dil kaydi etkin
+ve bos 176 arayuz metnine ceviri taslagi ekleniyor. Bazi etiketler
+halen Ingilizce kalabilir; tam ceviri iddiasi yoktur.
+
+1. [Turkce WebUI CI test paketi](https://github.com/b1glord/Suwayomi-Server/actions/workflows/suwayomi_webui_tr_preview.yml)
+   uzerinden en yeni basarili `suwayomi-webui-tr-preview` artifact'ini
+   indirin. ZIP'i acin; icindeki `Suwayomi-WebUI-TR-preview.zip` ve
+   `SHA256SUMS.txt` dosyalarini ayni klasore koyun.
+2. Suwayomi WebUI > Settings > WebUI ayarlarinda **WebUI Flavor = Custom**
+   secin ve kaydedin. Indirmeler aktifse once duraklatin. Bu test kurulumunu
+   uygun bakim aninda yapin: yalnizca suwayomi servisi durdurulacak.
+3. Repository kokunde asagidaki komutlarla indirdiginiz gercek ZIP yolunu
+   belirtin. `Check` dosyalari degistirmeden paket dogrular.
+4. `Install` sadece durmus Suwayomi'ye izin verir, WebUI ayarinin
+   Custom oldugunu denetler, `storage/Tachidesk/webUI` klasorunu
+   `webui-tr-backups` altinda saklar, Turkce arayuzu kurar.
+   Sonra yalnizca Suwayomi servisini baslatin ve Settings > General
+   (veya Appearance) > App language alanindan Turkceyi secin.
+
+~~~powershell
+Set-Location 'E:\Docker\Suwayomi-Server'
+$Compose = 'deploy/burak-manga/compose.yaml'
+$Zip = 'C:\Path\To\Suwayomi-WebUI-TR-preview.zip'
+$Installer = 'deploy/burak-manga/scripts/install-turkish-webui.ps1'
+& $Installer -Mode Check -ZipPath $Zip
+docker compose -f $Compose stop suwayomi
+& $Installer -Mode Install -ZipPath $Zip
+docker compose -f $Compose up -d --no-deps suwayomi
+~~~
+
+**Rollback:** Indirmeleri duraklatin, `docker compose -f $Compose stop
+suwayomi`, sonra `& $Installer -Mode Restore`, ardindan yalnizca
+`suwayomi` servisini `up -d --no-deps` ile baslatin. Eski UI dosyalari
+ve Turkce dosyalarin geri alinan kopyasi yedek klasorunde tutulur.
+Gerekiyorsa Settings > WebUI > Flavor ayarini normal WebUI'ye cevirin.
+
+**Onemli sinir:** Test preview, upstream WebUI'nin belirli commit'inden
+uretilmistir; kullanicinin canli server/WebUI entegrasyonu yerel Docker'da
+ayrica dogrulanmalidir. ZIP dosyasini guvenilir GitHub Actions sayfasindan
+edinin. ZIP checksum dosyasi paketin bozulmadigini denetler, tek basina
+yayinci kimligini dogrulamaz. Suwayomi indirme kuyrugunu yeniden baslatmadan
+once tek bolum ile deneyin. Script DB, downloaded manga, Compose ve
+Cloudflare servislerini degistirmez.

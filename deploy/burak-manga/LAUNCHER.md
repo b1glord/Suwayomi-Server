@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/deploy/burak-manga/LAUNCHER.md
 Amac: Rust Windows launcher kurulumu, kullanim ve test sinirlari
 Modul - Markdown
-Version: 0.7.0
+Version: 0.7.1
 Aciklama: Tasinabilir test EXE, Compose guvenligi ve katalog islemleri
 Bagimli Oldugu Katman: Documentation
 -->
@@ -145,3 +145,9 @@ Yeni kod derleme artifakti GitHub Actions uzerinden ayrica edinilmelidir.
 
 Yerel launcher EXE'si `.gitignore` kapsaminda tutularak kaydedilmemis
 manga verileri ve diger kullanici dosyalari korunur.
+
+## Turkce WebUI
+
+Rust Launcher arayuzu farkli, Suwayomi'nin tarayici WebUI dili farklidir.
+WebUI Turkce test paketini kurmak icin README.md > Turkce WebUI test
+kurulumu bolumunu takip edin. Launcher veya Docker image yeniden derlenmez.
