@@ -1,0 +1,97 @@
+# Dosya Yolu: REPO_ROOT/deploy/burak-manga/compose.yaml
+# Amac: Tek Docker Compose icinde Byparr -> FlareSolverr otomatik yedekleme
+# Modul - YAML
+# Version: 0.4.2
+# Aciklama: Suwayomi sadece cf-router URL'sini kullanir; veri volume'u korunur
+# Bagimli Oldugu Katman: Infrastructure
+services:
+  suwayomi:
+    image: ghcr.io/suwayomi/suwayomi-server:stable
+    init: true
+    environment:
+      TZ: Europe/Istanbul
+      DOWNLOAD_AS_CBZ: "true"
+      FLARESOLVERR_ENABLED: "true"
+      FLARESOLVERR_URL: "http://cf-router:8191"
+      # Two backends can each take up to 60s.
+      FLARESOLVERR_TIMEOUT: "150"
+    depends_on:
+      - cf-router
+    ports:
+      - "127.0.0.1:4567:4567"
+    volumes:
+      - ./storage/Tachidesk:/home/suwayomi/.local/share/Tachidesk
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cf-router:
+    image: python:3.13-alpine
+    init: true
+    command: ["python", "-B", "/app/router.py"]
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      CF_PRIMARY: "http://flaresolverr:8191"
+      CF_SECONDARY: "http://flaresolverr-official:8191"
+    volumes:
+      - ./cloudflare-router/router.py:/app/router.py:ro
+    depends_on:
+      - flaresolverr
+      - flaresolverr-official
+    read_only: true
+    # Only internal Docker DNS; no published host API port.
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  flaresolverr:
+    # First attempt: Byparr compatible API. Upstream publishes :latest, not :v3.0.4.
+    # Remote manifest checked by Burak Manga CI before deployment.
+    image: ghcr.io/thephaseless/byparr:latest
+    environment:
+      TZ: Europe/Istanbul
+    shm_size: "512mb"
+    # Upstream healthcheck runs every 15m; check readiness sooner.
+    # GeoIP/egress discovery can take time on cold starts.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8191/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 3m
+      retries: 3
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  flaresolverr-official:
+    # Automatic fallback: official FlareSolverr.
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2
+    environment:
+      TZ: Europe/Istanbul
+      LOG_LEVEL: info
+    shm_size: "512mb"
+    tmpfs:
+      - /tmp:size=256M,mode=1777
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,77 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/burak_manga_validate.yml
+# Amac: Manga arsivi dosyalarini yalnizca PR esnasinda dogrular
+# Modul - YAML
+# Version: 1.0.0
+# Aciklama: Unit test, kaynak kaydi ve Compose statik kontrolu; release yok
+# Bagimli Oldugu Katman: Testing
+name: Burak Manga - validate
+on:
+  pull_request:
+    paths:
+      - 'deploy/burak-manga/**'
+      - 'AGENTS.md'
+      - '.github/workflows/burak_manga_validate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - name: Validate source registry (offline)
+        run: python deploy/burak-manga/scripts/validate_sources.py
+      - name: Unit tests (offline)
+        run: python -m unittest discover -s deploy/burak-manga/tests -v
+      - name: Turkish WebUI package checks (offline)
+        shell: pwsh
+        run: ./deploy/burak-manga/tests/test_turkish_webui_install.ps1
+      - name: LAN access helper mock tests
+        shell: pwsh
+        run: ./deploy/burak-manga/tests/test_lan_access.ps1
+      - name: Compose static config
+        run: docker compose -f deploy/burak-manga/compose.yaml config --quiet
+      - name: Validate LAN overlay port merging without containers
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmpfile="$(mktemp --suffix=.yaml)"
+          trap 'rm -f "$tmpfile"' EXIT
+          printf '# BURAK_MANGA_LAN_V1\nservices:\n  suwayomi:\n    ports:\n      - "192.168.1.10:4567:4567"\n' > "$tmpfile"
+          docker compose -f deploy/burak-manga/compose.yaml -f "$tmpfile" config --format json > "$RUNNER_TEMP/lan-compose.json"
+          python - <<'PY'
+          import json, os, pathlib
+          cfg=json.loads(pathlib.Path(os.environ['RUNNER_TEMP'],'lan-compose.json').read_text())
+          ports=cfg['services']['suwayomi']['ports']
+          bindings={(p.get('host_ip'),str(p['published']),p['target']) for p in ports}
+          assert ('127.0.0.1','4567',4567) in bindings, bindings
+          assert ('192.168.1.10','4567',4567) in bindings, bindings
+          assert len(bindings)==2, bindings
+          print('LAN Compose overlay static merge verified:',sorted(bindings))
+          PY
+      - name: Verify referenced public container image manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          images=(
+            'ghcr.io/suwayomi/suwayomi-server:stable'
+            'python:3.13-alpine'
+            'ghcr.io/thephaseless/byparr:latest'
+            'ghcr.io/flaresolverr/flaresolverr:v3.5.2'
+          )
+          for img in "${images[@]}"; do
+            echo "Checking remote image manifest: $img"
+            timeout 90s docker buildx imagetools inspect "$img" >/dev/null
+          done
+      - name: Parse Windows startup PowerShell (syntax only)
+        shell: pwsh
+        run: |
+          $Tokens = $null
+          $Errors = $null
+          $Path = Join-Path $PWD 'deploy/burak-manga/scripts/start-windows.ps1'
+          [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$Tokens, [ref]$Errors) | Out-Null
+          if ($Errors.Count -gt 0) { $Errors | Format-List; exit 1 }

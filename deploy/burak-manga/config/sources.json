@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "id": "merlinscans",
+      "name": "MerlinScans",
+      "base_url": "https://merlinscans.org/",
+      "example_url": "https://merlinscans.org/manga/",
+      "status": "extension_code_found",
+      "extension_base_url": "https://merlintoon.com",
+      "extension_code": "https://github.com/keiyoushi/extensions-source/tree/main/src/tr/merlinscans"
+    },
+    {
+      "id": "ruyamanga2",
+      "name": "Rüya Manga 2",
+      "base_url": "https://www.ruyamanga2.com/",
+      "example_url": "https://www.ruyamanga2.com/manga/martial-peak/bolum-93/",
+      "status": "extension_code_found",
+      "extension_base_url": "https://www.ruyamanga2.com",
+      "extension_code": "https://github.com/keiyoushi/extensions-source/tree/main/src/tr/ruyamanga"
+    }
+  ]
+}
