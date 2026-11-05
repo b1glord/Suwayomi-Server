@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.5.1
+// Version: 0.5.2
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -19,14 +19,43 @@ const OKUTOON_MARTIAL_PEAK: &str = "https://okutoon.com/martial-peak";
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads }
 
+/// Only the expected local Compose .env values may enable the optional helper.
+/// User-provided values never become command names or shell expressions.
+fn official_flaresolverr_selected(compose: &Path) -> bool {
+    let Some(parent) = compose.parent() else { return false; };
+    let Ok(text) = std::fs::read_to_string(parent.join(".env")) else { return false; };
+    let mut profiles = false;
+    let mut url = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.is_empty() { continue; }
+        if let Some((key, raw)) = line.split_once('=') {
+            let value = raw.trim().trim_matches('"').trim_matches('\'');
+            match key.trim() {
+                "COMPOSE_PROFILES" => {
+                    profiles = value.split(',').any(|p| p.trim() == "official-flaresolverr");
+                }
+                "MANGA_CF_HELPER_URL" => url = value == "http://flaresolverr-official:8191",
+                _ => {}
+            }
+        }
+    }
+    profiles && url
+}
+
 impl Action {
     fn args(self, file: &Path) -> Vec<OsString> {
         let mut args = vec![OsString::from("compose"), OsString::from("-f"), file.as_os_str().to_owned()];
+        let official = official_flaresolverr_selected(file);
         let suffix: &[&str] = match self {
+            Self::Start if official => &["up", "-d", "suwayomi", "flaresolverr-official"],
             Self::Start => &["up", "-d", "suwayomi"],
+            Self::Stop if official => &["stop", "suwayomi", "flaresolverr", "flaresolverr-official"],
             Self::Stop => &["stop", "suwayomi", "flaresolverr"],
+            Self::Restart if official => &["restart", "flaresolverr-official", "flaresolverr", "suwayomi"],
             Self::Restart => &["restart", "flaresolverr", "suwayomi"],
             Self::Status => &["ps", "--status", "running", "--services"],
+            Self::Logs if official => &["logs", "--tail", "100", "--no-color", "suwayomi", "flaresolverr", "flaresolverr-official"],
             Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi", "flaresolverr"],
             Self::Archive | Self::Diagnostics | Self::PauseDownloads => &[],
         };
@@ -339,10 +368,16 @@ mod win {
         let response = docker(&action.args(compose), compose, time)?;
         if action == Action::Status {
             let suwayomi_up = response.lines().any(|s| s.trim() == "suwayomi");
-            let helper_up = response.lines().any(|s| s.trim() == "flaresolverr");
+            let selected_service = if official_flaresolverr_selected(compose) {
+                "flaresolverr-official"
+            } else {
+                "flaresolverr"
+            };
+            let helper_up = response.lines().any(|s| s.trim() == selected_service);
             let server = if suwayomi_up { "Suwayomi CALISIYOR" } else { "Suwayomi DURDURULMUS" };
             let helper = if helper_up { "Cloudflare yardimcisi CALISIYOR" } else { "Cloudflare yardimcisi DURDURULMUS" };
-            Ok(format!("{server} | {helper}"))
+            let name = if selected_service == "flaresolverr-official" { "FlareSolverr" } else { "Byparr" };
+            Ok(format!("{server} | {name}: {helper}"))
         } else { Ok(response) }
     }
 
@@ -568,6 +603,38 @@ mod tests {
         assert_eq!(&tokens(Action::Restart)[3..], &["restart", "flaresolverr", "suwayomi"]);
         assert_eq!(&tokens(Action::Logs)[3..],
             &["logs", "--tail", "100", "--no-color", "suwayomi", "flaresolverr"]);
+    }
+    #[test]
+    fn official_flaresolverr_profile_is_read_from_local_env() {
+        let dir = std::env::temp_dir().join(format!(
+            "bm_flare_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let compose = dir.join("compose.yaml");
+        std::fs::write(
+            dir.join(".env"),
+            "COMPOSE_PROFILES=official-flaresolverr\nMANGA_CF_HELPER_URL=http://flaresolverr-official:8191\n",
+        ).unwrap();
+        let tokens = |action: Action| -> Vec<String> {
+            action.args(&compose).iter()
+                .map(|a| a.to_string_lossy().into_owned()).collect()
+        };
+        assert!(official_flaresolverr_selected(&compose));
+        assert_eq!(&tokens(Action::Start)[3..],
+            &["up", "-d", "suwayomi", "flaresolverr-official"]);
+        assert!(tokens(Action::Stop).contains(&"flaresolverr-official".to_owned()));
+        assert!(tokens(Action::Logs).contains(&"flaresolverr-official".to_owned()));
+
+        std::fs::write(
+            dir.join(".env"),
+            "COMPOSE_PROFILES=official-flaresolverr\nMANGA_CF_HELPER_URL=http://flaresolverr:8191\n",
+        ).unwrap();
+        assert!(!official_flaresolverr_selected(&compose));
+        assert_eq!(&tokens(Action::Start)[3..], &["up", "-d", "suwayomi"]);
+        std::fs::remove_dir_all(dir).unwrap();
     }
     #[test]
     fn missing_compose_fails_clearly() {
