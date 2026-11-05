@@ -71,7 +71,7 @@ try {
     New-Item -Path $mockBackup -ItemType Directory -Force | Out-Null
     Copy-Item -LiteralPath $script -Destination (Join-Path $scriptDir 'install-turkish-webui.ps1')
     Set-Content -LiteralPath (Join-Path $mockRoot 'compose.yaml') -Value 'services: {}'
-    Set-Content -LiteralPath (Join-Path $mockData 'server.conf') -Value 'webUIFlavor = "Custom"'
+    Set-Content -LiteralPath (Join-Path $mockData 'server.conf') -Value 'server.webUIFlavor = "Custom"'
     Set-Content -LiteralPath (Join-Path $mockWebUI 'index.html') -Value 'original-interface'
     Set-Content -LiteralPath (Join-Path $mockBackup 'index.html') -Value 'previous-original-interface'
     $mockInstaller = Join-Path $scriptDir 'install-turkish-webui.ps1'

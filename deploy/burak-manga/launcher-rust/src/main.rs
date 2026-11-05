@@ -403,7 +403,7 @@ mod win {
 
         match (apply, restart) {
             (Ok(applied), Ok(started)) => Ok(format!(
-                "{preflight}\n\n{applied}\n\n{started}\n\nIndirme kuyrugu otomatik baslatilmadi.\nWebUI'yi acip dili Turkce secin.",
+                "{preflight}\n\n{applied}\n\n{started}\n\nSuwayomi acilista indirme kuyrugunu otomatik devam ettirebilir.\nWebUI'den indirici durumunu kontrol edin ve Turkce dilini secin.",
             )),
             (Err(error), Ok(started)) => Err(format!(
                 "WEBUI_APPLY_FAILED: {error}\nSuwayomi onceki calisma durumuna donduruldu: {started}"
@@ -646,7 +646,7 @@ mod win {
                         if !gui.busy {
                             let answer = MessageBoxW(
                                 hwnd,
-                                wide("Türkçe test paketi kurulacak.\n\nÖnce WebUI > Settings > WebUI > Flavor = Custom seçin.\n\nİndirmeler duraklatılacak, yalnızca Suwayomi geçici durdurulacak; mevcut WebUI yedeklenecek.\n\nOnaylıyor musunuz?").as_ptr(),
+                                wide("Türkçe test paketi kurulacak.\n\nÖnce WebUI > Settings > WebUI > Flavor = Custom seçin.\n\nİndirmeler duraklatılacak, yalnızca Suwayomi geçici durdurulacak; mevcut WebUI yedeklenecek.\nSuwayomi tekrar başladığında indirme kuyruğu otomatik devam edebilir.\n\nOnaylıyor musunuz?").as_ptr(),
                                 wide("Türkçe WebUI kurulum onayı").as_ptr(),
                                 MB_YESNO | MB_ICONQUESTION,
                             );
@@ -666,7 +666,7 @@ mod win {
                         if !gui.busy {
                             let answer = MessageBoxW(
                                 hwnd,
-                                wide("Türkçe WebUI yerine son kaydedilen orijinal WebUI geri getirilecek.\n\nİndirmeler duraklatılacak; sadece Suwayomi geçici duracak.\n\nDevam edilsin mi?").as_ptr(),
+                                wide("Türkçe WebUI yerine son kaydedilen orijinal WebUI geri getirilecek.\n\nİndirmeler duraklatılacak; sadece Suwayomi geçici duracak.\nAçılışta indirme kuyruğu otomatik devam edebilir.\n\nDevam edilsin mi?").as_ptr(),
                                 wide("Türkçe WebUI geri alma onayı").as_ptr(),
                                 MB_YESNO | MB_ICONQUESTION,
                             );
