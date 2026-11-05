@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/deploy/burak-manga/launcher-rust/src/main.rs
 // Amac: Native Windows GUI uzerinden Suwayomi Docker servisini yonetir
 // Modul - Rust
-// Version: 0.7.0
+// Version: 0.8.0
 // Aciklama: Tasinabilir compose, sinirli Docker komutlari, asenkron arayuz
 // Bagimli Oldugu Katman: View / Service / Tool
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
@@ -12,13 +12,14 @@ use std::path::{Path, PathBuf};
 mod archive;
 mod diagnostics;
 mod git_update;
+mod webui_install;
 
 const CATALOG: &str = "https://raw.githubusercontent.com/b1glord/Suwayomi-Server-Extensions/repo/index.pb";
 const WEB: &str = "http://127.0.0.1:4567";
 const OKUTOON_MARTIAL_PEAK: &str = "https://okutoon.com/martial-peak";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads, GitPull }
+enum Action { Start, Stop, Restart, Status, Logs, Archive, Diagnostics, PauseDownloads, GitPull, TurkishInstall, TurkishRestore }
 
 impl Action {
     fn args(self, file: &Path) -> Vec<OsString> {
@@ -30,7 +31,7 @@ impl Action {
             Self::Restart => &["restart", "flaresolverr", "flaresolverr-official", "cf-router", "suwayomi"],
             Self::Status => &["ps", "--status", "running", "--services"],
             Self::Logs => &["logs", "--tail", "100", "--no-color", "suwayomi", "cf-router", "flaresolverr", "flaresolverr-official"],
-            Self::Archive | Self::Diagnostics | Self::PauseDownloads | Self::GitPull => &[],
+            Self::Archive | Self::Diagnostics | Self::PauseDownloads | Self::GitPull | Self::TurkishInstall | Self::TurkishRestore => &[],
         };
         args.extend(suffix.iter().map(OsString::from));
         args
@@ -46,6 +47,8 @@ impl Action {
             Self::Diagnostics => "İndirme tanılama",
             Self::PauseDownloads => "İndirmeleri duraklatma",
             Self::GitPull => "Git Pull",
+            Self::TurkishInstall => "Türkçe WebUI kurulumu",
+            Self::TurkishRestore => "Türkçe WebUI geri alma",
         }
     }
 }
@@ -65,13 +68,13 @@ fn compose_file(exe: &Path) -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 mod win {
-    use super::{archive, diagnostics, git_update, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
+    use super::{archive, diagnostics, git_update, webui_install, Action, CATALOG, OKUTOON_MARTIAL_PEAK, WEB};
     use std::collections::HashMap;
     use std::ffi::{OsStr, OsString};
     use std::mem;
     use std::io::{Read, Write};
     use std::net::{SocketAddr, TcpStream};
-    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::os::windows::fs::MetadataExt;
     use std::os::windows::process::CommandExt;
     use std::path::{Path, PathBuf};
@@ -84,6 +87,7 @@ mod win {
     use windows_sys::Win32::Graphics::Gdi::{GetStockObject, DEFAULT_GUI_FONT};
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::Controls::Dialogs::{CommDlgExtendedError, GetOpenFileNameW, OPENFILENAMEW, OFN_FILEMUSTEXIST, OFN_NOCHANGEDIR, OFN_PATHMUSTEXIST};
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
     const HEADER: usize = 101;
@@ -107,6 +111,9 @@ mod win {
     const GUARD_TOGGLE: usize = 124;
     const PAUSE_DOWNLOADS: usize = 125;
     const GIT_PULL: usize = 126;
+    const TURKISH_PACKAGE: usize = 127;
+    const TURKISH_INSTALL: usize = 128;
+    const TURKISH_RESTORE: usize = 129;
     const DIAG_POLL_INTERVAL: Duration = Duration::from_secs(60);
     const TIMER_ID: usize = 5;
     const GUI_SMOKE_TIMER: usize = 6;
@@ -142,6 +149,7 @@ mod win {
         receiver: Receiver<Done>,
         busy: bool,
         guard_enabled: bool,
+        selected_turkish_zip: Option<PathBuf>,
         auto_pause_issued: bool,
         last_diagnostics: Instant,
     }
@@ -149,7 +157,7 @@ mod win {
         fn new(compose: PathBuf) -> Self {
             let (sender, receiver) = mpsc::channel();
             Self { compose, controls: HashMap::new(), sender, receiver, busy: false,
-                guard_enabled: false, auto_pause_issued: false,
+                guard_enabled: false, selected_turkish_zip: None, auto_pause_issued: false,
                 last_diagnostics: Instant::now() }
         }
         fn control(&self, id: usize) -> HWND { self.controls.get(&id).copied().unwrap_or(ptr::null_mut()) }
@@ -163,9 +171,14 @@ mod win {
             }
             self.label(&format!("{} islemi devam ediyor...", action.title()));
             let path = self.compose.clone();
+            let zip = self.selected_turkish_zip.clone();
             let tx = self.sender.clone();
             thread::spawn(move || {
-                let raw = perform(action, &path);
+                let raw = match action {
+                    Action::TurkishInstall => webui_manage(webui_install::Operation::Install, &path, zip.as_deref()),
+                    Action::TurkishRestore => webui_manage(webui_install::Operation::Restore, &path, None),
+                    _ => perform(action, &path),
+                };
                 let health = if action == Action::Diagnostics {
                     raw.as_ref().ok().map(|logs| diagnostics::parse(logs))
                 } else { None };
@@ -186,6 +199,7 @@ mod win {
             while let Ok(done) = self.receiver.try_recv() {
                 self.busy = false;
                 let git_ok = done.action == Action::GitPull && done.output.is_ok();
+                let turkish_ok = matches!(done.action, Action::TurkishInstall | Action::TurkishRestore) && done.output.is_ok();
                 match done.output {
                     Ok(output) => {
                         match done.action {
@@ -214,6 +228,12 @@ mod win {
                         "Git Pull tamamlandı. Docker için Başlat düğmesini kullanın."
                     } else {
                         "Git Pull başarısız. Ayrıntılar işlem günlüğünde."
+                    });
+                } else if matches!(done.action, Action::TurkishInstall | Action::TurkishRestore) {
+                    self.label(if turkish_ok {
+                        "WebUI dosyaları güncellendi; dil için WebUI Ayarları'nı kontrol edin."
+                    } else {
+                        "WebUI işlemi tamamlanamadı. Ayrıntılar günlükte."
                     });
                 } else {
                     self.label(&done.status.unwrap_or_else(|e| format!("Docker baglantisi yok: {e}")));
@@ -327,6 +347,76 @@ mod win {
         ))
     }
 
+    // BM-WEBUI-008: Preflight before stopping containers; restart only if previously running.
+    // Script and Docker command arguments are fixed. The user-selected ZIP is one argv element.
+    fn webui_script(
+        mode: webui_install::ScriptMode,
+        compose: &Path,
+        zip: Option<&Path>,
+    ) -> Result<String, String> {
+        let script = webui_install::script_path(compose)?;
+        let args = webui_install::script_arguments(mode, &script, zip)?;
+        let root = compose.parent().ok_or("COMPOSE_PARENT_MISSING")?;
+        run_process("powershell.exe", &args, root, Duration::from_secs(240))
+    }
+
+    fn webui_manage(
+        operation: webui_install::Operation,
+        compose: &Path,
+        zip: Option<&Path>,
+    ) -> Result<String, String> {
+        let preflight = webui_script(operation.preflight(), compose, zip)?;
+        let was_running = webui_install::is_running(
+            &docker(&Action::Status.args(compose), compose, Duration::from_secs(20))?,
+            "suwayomi",
+        );
+
+        if was_running {
+            // Requires API confirmation. If auth blocks pausing, leave server untouched.
+            pause_downloads()?;
+            docker(
+                &[
+                    OsString::from("compose"), OsString::from("-f"),
+                    compose.as_os_str().to_owned(), OsString::from("stop"),
+                    OsString::from("suwayomi"),
+                ],
+                compose,
+                Duration::from_secs(60),
+            )?;
+        }
+
+        let apply = webui_script(operation.apply(), compose, zip);
+        let restart = if was_running {
+            docker(
+                &[
+                    OsString::from("compose"), OsString::from("-f"),
+                    compose.as_os_str().to_owned(), OsString::from("up"),
+                    OsString::from("-d"), OsString::from("--no-deps"),
+                    OsString::from("suwayomi"),
+                ],
+                compose,
+                Duration::from_secs(120),
+            )
+        } else {
+            Ok("Suwayomi daha once kapaliydi; kapali birakildi.".into())
+        };
+
+        match (apply, restart) {
+            (Ok(applied), Ok(started)) => Ok(format!(
+                "{preflight}\n\n{applied}\n\n{started}\n\nIndirme kuyrugu otomatik baslatilmadi.\nWebUI'yi acip dili Turkce secin.",
+            )),
+            (Err(error), Ok(started)) => Err(format!(
+                "WEBUI_APPLY_FAILED: {error}\nSuwayomi onceki calisma durumuna donduruldu: {started}"
+            )),
+            (Ok(applied), Err(error)) => Err(format!(
+                "WEBUI_APPLIED_BUT_SERVER_START_FAILED:\n{applied}\n{error}\nVeri ve yedekler korunuyor; Suwayomi durumunu kontrol edin."
+            )),
+            (Err(apply_error), Err(restart_error)) => Err(format!(
+                "WEBUI_APPLY_AND_RESTART_FAILED:\n{apply_error}\n{restart_error}\nYedekleri silmeyin."
+            )),
+        }
+    }
+
     fn pause_downloads() -> Result<String, String> {
         // The upstream stopDownloader mutation preserves queued/downloaded chapters.
         // Communicate only with the known loopback GraphQL endpoint; never bypass auth.
@@ -425,7 +515,8 @@ mod win {
         make(hwnd, state, STATUS, "STATIC", "Sunucu durumu kontrol ediliyor...", 0, 0);
         for (id, caption) in [
             (START, "Başlat"), (STOP, "Durdur"), (RESTART, "Yeniden Başlat"), (REFRESH, "Durumu Yenile"),
-            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (GIT_PULL, "Git Pull"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç"),
+            (WEB_BUTTON, "WebUI Aç"), (LOGS, "Günlükler"), (GIT_PULL, "Git Pull"), (TURKISH_PACKAGE, "Türkçe Paketi Al"), (COPY, "Kataloğu Kopyala"), (OPEN, "Kataloğu Aç"),
+            (TURKISH_INSTALL, "Türkçe WebUI Kur"), (TURKISH_RESTORE, "Türkçeyi Geri Al"),
             (ARCHIVE_OPEN, "Arşiv Klasörünü Aç"), (ARCHIVE_REFRESH, "Arşivi Yenile"),
             (OKUTOON, "OkuToon / Martial Peak"),
             (DIAG_REFRESH, "İndirmeleri Kontrol Et"),
@@ -458,13 +549,16 @@ mod win {
         pos(WEB_BUTTON, margin, 166, bw, 39);
         pos(LOGS, margin + bw + 12, 166, bw, 39);
         pos(GIT_PULL, margin + 2 * (bw + 12), 166, bw, 39);
+        pos(TURKISH_PACKAGE, margin + 3 * (bw + 12), 166, bw, 39);
         pos(URL, margin, 231, full, 32);
-        pos(COPY, margin, 278, bw + 55, 39);
-        pos(OPEN, margin + bw + 67, 278, bw, 39);
-        pos(OKUTOON, margin + 2 * bw + 78, 278, bw + 20, 39);
+        pos(COPY, margin, 278, bw, 39);
+        pos(OPEN, margin + bw + 12, 278, bw, 39);
+        pos(TURKISH_INSTALL, margin + 2 * (bw + 12), 278, bw, 39);
+        pos(TURKISH_RESTORE, margin + 3 * (bw + 12), 278, bw, 39);
         pos(ARCHIVE_LABEL, margin, 329, full, 26);
-        pos(ARCHIVE_OPEN, margin, 360, bw + 80, 39);
-        pos(ARCHIVE_REFRESH, margin + bw + 92, 360, bw, 39);
+        pos(ARCHIVE_OPEN, margin, 360, bw, 39);
+        pos(ARCHIVE_REFRESH, margin + bw + 12, 360, bw, 39);
+        pos(OKUTOON, margin + 2 * (bw + 12), 360, 2 * bw + 12, 39);
         pos(DIAG_LABEL, margin, 412, full, 33);
         pos(DIAG_REFRESH, margin, 455, bw + 70, 39);
         pos(GUARD_TOGGLE, margin + bw + 82, 455, bw + 35, 39);
@@ -495,6 +589,33 @@ mod win {
         if (value as isize) <= 32 { Err("Tarayici acilamadi".into()) } else { Ok(()) }
     }
 
+    fn select_turkish_zip(hwnd: HWND) -> Result<Option<PathBuf>, String> {
+        let mut buffer = vec![0u16; 32768];
+        let filter: Vec<u16> =
+            "Türkçe WebUI paketi\0Suwayomi-WebUI-TR-preview.zip\0ZIP dosyaları\0*.zip\0\0"
+                .encode_utf16()
+                .collect();
+        let title = wide("Suwayomi Türkçe WebUI ZIP paketini seçin");
+        let mut dialog: OPENFILENAMEW = unsafe { mem::zeroed() };
+        dialog.lStructSize = mem::size_of::<OPENFILENAMEW>() as u32;
+        dialog.hwndOwner = hwnd;
+        dialog.lpstrFilter = filter.as_ptr();
+        dialog.lpstrFile = buffer.as_mut_ptr();
+        dialog.nMaxFile = buffer.len() as u32;
+        dialog.lpstrTitle = title.as_ptr();
+        dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+        if unsafe { GetOpenFileNameW(&mut dialog) } == 0 {
+            let code = unsafe { CommDlgExtendedError() };
+            return if code == 0 {
+                Ok(None)
+            } else {
+                Err(format!("WEBUI_ZIP_FILE_DIALOG_FAILED: {code}"))
+            };
+        }
+        let end = buffer.iter().position(|&unit| unit == 0).unwrap_or(buffer.len());
+        Ok(Some(PathBuf::from(OsString::from_wide(&buffer[..end]))))
+    }
+
     unsafe extern "system" fn procedure(hwnd: HWND, message: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
         let state = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
         match message {
@@ -515,6 +636,41 @@ mod win {
                         );
                         if answer == IDYES {
                             gui.launch(Action::GitPull);
+                        }
+                    },
+                    TURKISH_PACKAGE => {
+                        if let Err(e) = browse(hwnd, webui_install::WORKFLOW_URL) { gui.log(&e); }
+                        else { gui.log("Actions > son başarılı Türkçe WebUI derlemesi > Artifacts bölümünden paketi indirin ve içindeki ZIP ile SHA256SUMS.txt dosyalarını aynı klasörde tutun."); }
+                    },
+                    TURKISH_INSTALL => {
+                        if !gui.busy {
+                            let answer = MessageBoxW(
+                                hwnd,
+                                wide("Türkçe test paketi kurulacak.\n\nÖnce WebUI > Settings > WebUI > Flavor = Custom seçin.\n\nİndirmeler duraklatılacak, yalnızca Suwayomi geçici durdurulacak; mevcut WebUI yedeklenecek.\n\nOnaylıyor musunuz?").as_ptr(),
+                                wide("Türkçe WebUI kurulum onayı").as_ptr(),
+                                MB_YESNO | MB_ICONQUESTION,
+                            );
+                            if answer == IDYES {
+                                match select_turkish_zip(hwnd) {
+                                    Ok(Some(zip)) => {
+                                        gui.selected_turkish_zip = Some(zip);
+                                        gui.launch(Action::TurkishInstall);
+                                    }
+                                    Ok(None) => gui.log("Dosya seçimi iptal edildi. Hiçbir değişiklik yapılmadı."),
+                                    Err(e) => gui.log(&e),
+                                }
+                            }
+                        }
+                    },
+                    TURKISH_RESTORE => {
+                        if !gui.busy {
+                            let answer = MessageBoxW(
+                                hwnd,
+                                wide("Türkçe WebUI yerine son kaydedilen orijinal WebUI geri getirilecek.\n\nİndirmeler duraklatılacak; sadece Suwayomi geçici duracak.\n\nDevam edilsin mi?").as_ptr(),
+                                wide("Türkçe WebUI geri alma onayı").as_ptr(),
+                                MB_YESNO | MB_ICONQUESTION,
+                            );
+                            if answer == IDYES { gui.launch(Action::TurkishRestore); }
                         }
                     },
                     WEB_BUTTON => if let Err(e) = browse(hwnd, WEB) { gui.log(&e); },
